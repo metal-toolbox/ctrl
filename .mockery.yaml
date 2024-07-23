@@ -1,0 +1,15 @@
+testonly: False
+with-expecter: True
+packages:
+  github.com/metal-toolbox/cntlr:
+    config:
+      fileName: "mock_{{.InterfaceName | firstLower}}.go"
+      inpackage: True
+    interfaces:
+      TaskHandler:
+      Publisher:
+      StatusPublisher:
+      ConditionStatusQueryor:
+      ConditionStatusPublisher:
+      eventStatusAcknowleger:
+      LivenessCheckin:
