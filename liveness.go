@@ -5,8 +5,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
-	orc "github.com/metal-toolbox/conditionorc/pkg/api/v1/orchestrator/client"
 	"github.com/metal-toolbox/rivets/events"
 	"github.com/metal-toolbox/rivets/events/pkg/kv"
 	"github.com/metal-toolbox/rivets/events/registry"
@@ -129,72 +127,4 @@ func refreshControllerToken(id registry.ControllerID) error {
 		return err
 	}
 	return nil
-}
-
-// HttpNatsLiveness  implements the LivenessCheckin interface
-type HttpNatsLiveness struct {
-	logger     *logrus.Logger
-	orcQueryor orc.Queryor
-	// The caller obtains the controllerID from its ConditionPop request,
-	// the controllerID is set on the StatusValue.WorkerID and Task.WorkerID objects,
-	// by the API endpoint.
-	controllerID registry.ControllerID
-	interval     time.Duration
-	serverID     uuid.UUID
-	conditionID  uuid.UUID
-}
-
-func NewHttpNatsLiveness(
-	orcQueryor orc.Queryor,
-	conditionID,
-	serverID uuid.UUID,
-	controllerID registry.ControllerID,
-	interval time.Duration,
-	l *logrus.Logger,
-) LivenessCheckin {
-	return &HttpNatsLiveness{
-		logger:       l,
-		conditionID:  conditionID,
-		controllerID: controllerID,
-		serverID:     serverID,
-		interval:     interval,
-		orcQueryor:   orcQueryor,
-	}
-
-}
-
-func (n *HttpNatsLiveness) StartLivenessCheckin(ctx context.Context) {
-	tick := time.NewTicker(n.interval)
-	defer tick.Stop()
-
-	var stop bool
-	for !stop {
-		select {
-		case <-tick.C:
-			resp, err := n.orcQueryor.ControllerCheckin(ctx, n.serverID, n.conditionID, n.controllerID)
-			if err != nil {
-				n.logger.WithError(err).
-					WithField("id", n.controllerID.String()).
-					Warn("controller check-in failed")
-			}
-
-			if resp.StatusCode != 200 {
-				n.logger.
-					WithField("statusCode", resp.StatusCode).
-					Warn("controller check-in returned non 200 status: " + resp.Message)
-
-				continue
-			}
-
-			n.logger.WithField("controllerID", n.controllerID.String()).Debug("check-in successful")
-
-		case <-ctx.Done():
-			n.logger.Info("liveness check-in stopping on done context")
-			stop = true
-		}
-	}
-}
-
-func (n *HttpNatsLiveness) ControllerID() registry.ControllerID {
-	return n.controllerID
 }
