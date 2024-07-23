@@ -11,7 +11,6 @@ import (
 	orc "github.com/metal-toolbox/conditionorc/pkg/api/v1/orchestrator/client"
 	"github.com/metal-toolbox/conditionorc/pkg/api/v1/orchestrator/types"
 	"github.com/metal-toolbox/rivets/condition"
-	"github.com/metal-toolbox/rivets/events/registry"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel"
@@ -193,16 +192,6 @@ func (n *HTTPController) runTaskWithMonitor(
 	defer span.End()
 	// doneCh indicates the handler run completed
 	doneCh := make(chan bool)
-
-	// parse controller ID from Task
-	controllerID, err := registry.ControllerIDFromString(task.WorkerID)
-	if err != nil {
-		return errors.Wrap(ErrHandlerInit, err.Error())
-	}
-
-	// start controller liveness
-	n.liveness = NewHttpNatsLiveness(n.orcQueryor, task.ID, n.serverID, controllerID, statusInterval, n.logger)
-	go n.liveness.StartLivenessCheckin(ctx)
 
 	// init publisher
 	publisher := NewHTTPPublisher(n.serverID, task.ID, n.conditionKind, controllerID, n.orcQueryor, n.logger)
