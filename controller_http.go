@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	pkgNameHttpController = "events/httpcontroller"
+	pkgHTTPController = "events/httpcontroller"
 	// count of times to retry a query (300 * 30 = 2.5h is how long we'll keep trying)
 	queryRetries = 300
 	// query timeout duration
@@ -36,8 +36,8 @@ var (
 	ErrNoWork        = errors.New("no Condition or Task identified for work")
 )
 
-// NatsHttpController implements the TaskHandler interface to interact with the NATS queue, KV over HTTP(s)
-type NatsHttpController struct {
+// HTTPController implements the TaskHandler interface to interact with the NATS queue, KV over HTTP(s)
+type HTTPController struct {
 	logger          *logrus.Logger
 	facilityCode    string
 	serverID        uuid.UUID
@@ -51,26 +51,26 @@ type NatsHttpController struct {
 	orcQueryor      orc.Queryor
 }
 
-type OrchestratorApiConfig struct {
+type OrchestratorAPIConfig struct {
 	AuthDisabled bool
 	Endpoint     string
 	AuthToken    string
 }
 
-// OptionNatsHttp sets parameters on the NatsHttpController
-type OptionNatsHttp func(*NatsHttpController)
+// OptionHTTPController sets parameters on the HTTPController
+type OptionHTTPController func(*HTTPController)
 
-func NewNatsHTTPController(
+func NewHTTPController(
 	facilityCode string,
 	serverID uuid.UUID,
 	conditionKind condition.Kind,
-	coClientCfg *OrchestratorApiConfig,
-	options ...OptionNatsHttp) (*NatsHttpController, error) {
+	orcClientCfg *OrchestratorAPIConfig,
+	options ...OptionHTTPController) (*HTTPController, error) {
 
 	logger := logrus.New()
 	logger.Formatter = &logrus.JSONFormatter{}
 
-	nhc := &NatsHttpController{
+	nhc := &HTTPController{
 		facilityCode:  facilityCode,
 		serverID:      serverID,
 		conditionKind: conditionKind,
@@ -84,7 +84,7 @@ func NewNatsHTTPController(
 	}
 
 	if nhc.orcQueryor == nil {
-		orcQueryor, err := newConditionsAPIClient(coClientCfg.Endpoint, coClientCfg.AuthToken, true)
+		orcQueryor, err := newConditionsAPIClient(orcClientCfg.Endpoint, orcClientCfg.AuthToken, true)
 		if err != nil {
 			return nil, errors.Wrap(ErrHandlerInit, "error in Conditions API client init: "+err.Error())
 		}
@@ -109,19 +109,21 @@ func newConditionsAPIClient(endpoint, token string, disableAuth bool) (orc.Query
 	)
 }
 
-func WithNatsHttpLogger(logger *logrus.Logger) OptionNatsHttp {
-	return func(n *NatsHttpController) {
+// Sets a logger on the controller
+func WithNATSHTTPLogger(logger *logrus.Logger) OptionHTTPController {
+	return func(n *HTTPController) {
 		n.logger = logger
 	}
 }
 
-func WithOrchestratorClient(c orc.Queryor) OptionNatsHttp {
-	return func(n *NatsHttpController) {
+// Sets the Orchestrator API queryor client
+func WithOrchestratorClient(c orc.Queryor) OptionHTTPController {
+	return func(n *HTTPController) {
 		n.orcQueryor = c
 	}
 }
 
-func (n *NatsHttpController) traceSpaceContextFromValues(traceID, spanID string) (trace.SpanContext, error) {
+func (n *HTTPController) traceSpaceContextFromValues(traceID, spanID string) (trace.SpanContext, error) {
 	// extract traceID and spanID
 	pTraceID, _ := trace.TraceIDFromHex(traceID)
 	pSpanID, _ := trace.SpanIDFromHex(spanID)
@@ -140,7 +142,7 @@ func (n *NatsHttpController) traceSpaceContextFromValues(traceID, spanID string)
 	return trace.SpanContext{}, errExtract
 }
 
-func (n *NatsHttpController) ID() string {
+func (n *HTTPController) ID() string {
 	if n.liveness == nil {
 		return ""
 	}
@@ -148,8 +150,8 @@ func (n *NatsHttpController) ID() string {
 	return n.liveness.ControllerID().String()
 }
 
-func (n *NatsHttpController) Run(ctx context.Context, handler TaskHandler) error {
-	ctx, span := otel.Tracer(pkgNameHttpController).Start(
+func (n *HTTPController) Run(ctx context.Context, handler TaskHandler) error {
+	ctx, span := otel.Tracer(pkgHTTPController).Start(
 		ctx,
 		"Run",
 	)
@@ -169,7 +171,7 @@ func (n *NatsHttpController) Run(ctx context.Context, handler TaskHandler) error
 	} else {
 		// overwrite span context with remote span when available
 		var span trace.Span
-		ctx, span = otel.Tracer(pkgNameHttpController).Start(
+		ctx, span = otel.Tracer(pkgHTTPController).Start(
 			trace.ContextWithRemoteSpanContext(ctx, remoteSpanCtx),
 			"Run",
 		)
@@ -179,12 +181,12 @@ func (n *NatsHttpController) Run(ctx context.Context, handler TaskHandler) error
 	return n.runTaskWithMonitor(ctx, handler, task)
 }
 
-func (n *NatsHttpController) runTaskWithMonitor(
+func (n *HTTPController) runTaskWithMonitor(
 	ctx context.Context,
 	handler TaskHandler,
 	task *condition.Task[any, any],
 ) error {
-	ctx, span := otel.Tracer(pkgNameHttpController).Start(
+	ctx, span := otel.Tracer(pkgHTTPController).Start(
 		ctx,
 		"runWithMonitor",
 	)
@@ -216,7 +218,14 @@ func (n *NatsHttpController) runTaskWithMonitor(
 		for {
 			select {
 			case <-ticker.C:
-				publisher.Publish(ctx, task, true)
+				if errPublish := publisher.Publish(
+					ctx,
+					task,
+					true,
+				); errPublish != nil {
+					n.logger.WithError(errPublish).Error("failed to publish update")
+				}
+
 			case <-doneCh:
 				break Loop
 			}
@@ -302,7 +311,7 @@ func sleepWithContext(ctx context.Context, t time.Duration) error {
 // if the controller restarts, it will only have access to the Task object going ahead.
 //
 // The Task object is the runtime information for a Condition, and its available as long as the Task is in an incomplete state.
-func (n *NatsHttpController) fetchWorkWithRetries(ctx context.Context, serverID uuid.UUID, tries int, interval time.Duration) (*condition.Task[any, any], error) {
+func (n *HTTPController) fetchWorkWithRetries(ctx context.Context, serverID uuid.UUID, tries int, interval time.Duration) (*condition.Task[any, any], error) {
 	var task *condition.Task[any, any]
 	var cond *condition.Condition
 
@@ -351,7 +360,7 @@ func (n *NatsHttpController) fetchWorkWithRetries(ctx context.Context, serverID 
 }
 
 // first attempt to fetch a queued Condition, if none exists attempt to fetch the Task
-func (n *NatsHttpController) fetchCondition(ctx context.Context, serverID uuid.UUID) (*condition.Condition, error) {
+func (n *HTTPController) fetchCondition(ctx context.Context, serverID uuid.UUID) (*condition.Condition, error) {
 	// if its a 404 || bad request just return
 	errFetchCondition := errors.New("error fetching condition from queue")
 
@@ -378,7 +387,7 @@ func (n *NatsHttpController) fetchCondition(ctx context.Context, serverID uuid.U
 	}
 }
 
-func (n *NatsHttpController) conditionFromResponse(resp *types.ServerResponse) (*condition.Condition, error) {
+func (n *HTTPController) conditionFromResponse(resp *types.ServerResponse) (*condition.Condition, error) {
 	errNoCondition := errors.New("no Condition object in response")
 
 	if resp.Condition == nil {
@@ -389,7 +398,7 @@ func (n *NatsHttpController) conditionFromResponse(resp *types.ServerResponse) (
 }
 
 // TODO: reuse the ConditionTaskRepository interface for this
-func (n *NatsHttpController) fetchTask(ctx context.Context, serverID uuid.UUID) (*condition.Task[any, any], error) {
+func (n *HTTPController) fetchTask(ctx context.Context, serverID uuid.UUID) (*condition.Task[any, any], error) {
 	errFetchTask := errors.New("error fetching Condition Task from queue")
 
 	resp, err := n.orcQueryor.ConditionTaskQuery(ctx, n.conditionKind, serverID)
@@ -415,7 +424,7 @@ func (n *NatsHttpController) fetchTask(ctx context.Context, serverID uuid.UUID) 
 	}
 }
 
-func (n *NatsHttpController) taskFromResponse(resp *types.ServerResponse) (*condition.Task[any, any], error) {
+func (n *HTTPController) taskFromResponse(resp *types.ServerResponse) (*condition.Task[any, any], error) {
 	errNoTask := errors.New("no Task object in response")
 
 	if resp.Task == nil {
