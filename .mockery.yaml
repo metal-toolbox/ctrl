@@ -1,7 +1,7 @@
 testonly: False
 with-expecter: True
 packages:
-  github.com/metal-toolbox/cntlr:
+  github.com/metal-toolbox/ctrl:
     config:
       fileName: "mock_{{.InterfaceName | firstLower}}.go"
       inpackage: True

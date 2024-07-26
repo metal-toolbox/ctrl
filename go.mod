@@ -1,4 +1,4 @@
-module github.com/metal-toolbox/cntlr
+module github.com/metal-toolbox/ctrl
 
 go 1.22
 
