@@ -5,7 +5,7 @@ go 1.22
 require (
 	github.com/google/uuid v1.6.0
 	github.com/metal-toolbox/conditionorc v1.0.9-0.20240716090543-6e7e9300b375
-	github.com/metal-toolbox/rivets v1.0.10-0.20240704084152-59b13ed066ca
+	github.com/metal-toolbox/rivets v1.2.0
 	github.com/nats-io/nats-server/v2 v2.10.12
 	github.com/nats-io/nats.go v1.36.0
 	github.com/pkg/errors v0.9.1
