@@ -522,13 +522,11 @@ func TestHTTPConditionStatusPublisher_Publish(t *testing.T) {
 	serverID := uuid.New()
 	conditionID := uuid.New()
 	conditionKind := condition.FirmwareInstall
-	controllerID := registry.GetID("test-controller")
 
 	publisher := &HTTPConditionStatusPublisher{
 		conditionID:   conditionID,
 		conditionKind: conditionKind,
 		serverID:      serverID,
-		controllerID:  controllerID,
 		logger:        logger,
 	}
 
@@ -551,11 +549,9 @@ func TestHTTPConditionStatusPublisher_Publish(t *testing.T) {
 					conditionKind,
 					serverID,
 					conditionID,
-					controllerID,
 					mock.MatchedBy(func(sv *condition.StatusValue) bool {
 						assert.Equal(t, sv.State, string(condition.Active))
 						assert.Equal(t, sv.Target, serverID.String())
-						assert.Equal(t, sv.WorkerID, controllerID.String())
 						assert.WithinDuration(t, time.Now(), sv.UpdatedAt, time.Second)
 
 						return true
@@ -575,7 +571,6 @@ func TestHTTPConditionStatusPublisher_Publish(t *testing.T) {
 					conditionKind,
 					serverID,
 					conditionID,
-					controllerID,
 					mock.IsType(&condition.StatusValue{}),
 					true,
 				).Return(&orctypes.ServerResponse{StatusCode: 200}, nil)
@@ -592,7 +587,6 @@ func TestHTTPConditionStatusPublisher_Publish(t *testing.T) {
 					conditionKind,
 					serverID,
 					conditionID,
-					controllerID,
 					mock.IsType(&condition.StatusValue{}),
 					false,
 				).Return(nil, errors.New("Publish error"))
@@ -610,7 +604,6 @@ func TestHTTPConditionStatusPublisher_Publish(t *testing.T) {
 					conditionKind,
 					serverID,
 					conditionID,
-					controllerID,
 					mock.IsType(&condition.StatusValue{}),
 					false,
 				).Return(&orctypes.ServerResponse{StatusCode: 400}, nil)

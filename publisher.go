@@ -29,7 +29,6 @@ type PublisherHTTP struct {
 func NewHTTPPublisher(serverID,
 	conditionID uuid.UUID,
 	conditionKind condition.Kind,
-	controllerID registry.ControllerID,
 	orcQueryor orc.Queryor,
 	logger *logrus.Logger) Publisher {
 	p := &PublisherHTTP{logger: logger}
@@ -37,7 +36,6 @@ func NewHTTPPublisher(serverID,
 		serverID,
 		conditionID,
 		conditionKind,
-		controllerID,
 		orcQueryor,
 		logger,
 	)
