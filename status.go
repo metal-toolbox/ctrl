@@ -461,14 +461,12 @@ type HTTPConditionStatusPublisher struct {
 	conditionKind condition.Kind
 	conditionID   uuid.UUID
 	serverID      uuid.UUID
-	controllerID  registry.ControllerID
 }
 
 func NewHTTPConditionStatusPublisher(
 	serverID,
 	conditionID uuid.UUID,
 	conditionKind condition.Kind,
-	controllerID registry.ControllerID,
 	orcQueryor orc.Queryor,
 	logger *logrus.Logger,
 ) ConditionStatusPublisher {
@@ -477,7 +475,6 @@ func NewHTTPConditionStatusPublisher(
 		conditionID:   conditionID,
 		conditionKind: conditionKind,
 		serverID:      serverID,
-		controllerID:  controllerID,
 		logger:        logger,
 	}
 }
@@ -491,7 +488,7 @@ func (s *HTTPConditionStatusPublisher) Publish(ctx context.Context, serverID str
 	defer span.End()
 
 	sv := &condition.StatusValue{
-		WorkerID:  s.controllerID.String(),
+		WorkerID:  serverID,
 		Target:    serverID,
 		TraceID:   trace.SpanFromContext(ctx).SpanContext().TraceID().String(),
 		SpanID:    trace.SpanFromContext(ctx).SpanContext().SpanID().String(),
@@ -500,7 +497,7 @@ func (s *HTTPConditionStatusPublisher) Publish(ctx context.Context, serverID str
 		UpdatedAt: time.Now(),
 	}
 
-	resp, err := s.orcQueryor.ConditionStatusUpdate(ctx, s.conditionKind, s.serverID, s.conditionID, s.controllerID, sv, tsUpdateOnly)
+	resp, err := s.orcQueryor.ConditionStatusUpdate(ctx, s.conditionKind, s.serverID, s.conditionID, sv, tsUpdateOnly)
 	if err != nil {
 		s.logger.WithError(err).Error("condition status update error")
 		return err

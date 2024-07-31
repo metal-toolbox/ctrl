@@ -141,14 +141,6 @@ func (n *HTTPController) traceSpaceContextFromValues(traceID, spanID string) (tr
 	return trace.SpanContext{}, errExtract
 }
 
-func (n *HTTPController) ID() string {
-	if n.liveness == nil {
-		return ""
-	}
-
-	return n.liveness.ControllerID().String()
-}
-
 func (n *HTTPController) Run(ctx context.Context, handler TaskHandler) error {
 	ctx, span := otel.Tracer(pkgHTTPController).Start(
 		ctx,
