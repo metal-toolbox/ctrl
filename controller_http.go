@@ -1,15 +1,19 @@
-package controller
+package ctrl
 
 import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"runtime/debug"
 	"time"
 
 	"github.com/google/uuid"
 	orc "github.com/metal-toolbox/conditionorc/pkg/api/v1/orchestrator/client"
-	"github.com/metal-toolbox/conditionorc/pkg/api/v1/orchestrator/types"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"golang.org/x/oauth2/clientcredentials"
+
+	"github.com/coreos/go-oidc"
 	"github.com/metal-toolbox/rivets/condition"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -43,19 +47,21 @@ type HTTPController struct {
 	facilityCode    string
 	serverID        uuid.UUID
 	conditionKind   condition.Kind
-	queryRetries    int
-	queryTimeout    time.Duration
+	orcQueryRetries int
 	queryInterval   time.Duration
 	handlerTimeout  time.Duration
-	checkinInterval time.Duration
-	liveness        LivenessCheckin
 	orcQueryor      orc.Queryor
 }
 
 type OrchestratorAPIConfig struct {
-	AuthDisabled bool
-	Endpoint     string
-	AuthToken    string
+	AuthDisabled         bool
+	Endpoint             string
+	AuthToken            string
+	OidcIssuerEndpoint   string
+	OidcAudienceEndpoint string
+	OidcClientSecret     string
+	OidcClientID         string
+	OidcClientScopes     []string
 }
 
 // OptionHTTPController sets parameters on the HTTPController
@@ -85,7 +91,7 @@ func NewHTTPController(
 	}
 
 	if nhc.orcQueryor == nil {
-		orcQueryor, err := newConditionsAPIClient(orcClientCfg.Endpoint, orcClientCfg.AuthToken, true)
+		orcQueryor, err := newConditionsAPIClient(orcClientCfg)
 		if err != nil {
 			return nil, errors.Wrap(ErrHandlerInit, "error in Conditions API client init: "+err.Error())
 		}
@@ -96,18 +102,56 @@ func NewHTTPController(
 	return nhc, nil
 }
 
-func newConditionsAPIClient(endpoint, token string, disableAuth bool) (orc.Queryor, error) {
-	if disableAuth {
+func newConditionsAPIClient(cfg *OrchestratorAPIConfig) (orc.Queryor, error) {
+	if cfg.AuthDisabled {
 		return orc.NewClient(
-			endpoint,
+			cfg.Endpoint,
 		)
 	}
 
-	// TODO: oauth client magic
+	client, err := newOAuthClient(cfg)
+	if err != nil {
+		return nil, err
+	}
+
 	return orc.NewClient(
-		endpoint,
-		orc.WithAuthToken(token),
+		cfg.Endpoint,
+		orc.WithHTTPClient(client),
+		orc.WithAuthToken(cfg.AuthToken),
 	)
+}
+
+// returns an http client setup with oauth and otelhttp
+func newOAuthClient(cfg *OrchestratorAPIConfig) (*http.Client, error) {
+	errProvider := errors.New("orchestrator client OIDC provider setup error")
+
+	// otel http client
+	client := otelhttp.DefaultClient
+
+	// context for OIDC issuer endpoint query
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// setup oidc provider
+	provider, err := oidc.NewProvider(ctx, cfg.OidcIssuerEndpoint)
+	if err != nil {
+		return nil, errors.Wrap(errProvider, err.Error())
+	}
+
+	// setup oauth configuration
+	oauthConfig := clientcredentials.Config{
+		ClientID:       cfg.OidcClientID,
+		ClientSecret:   cfg.OidcClientSecret,
+		TokenURL:       provider.Endpoint().TokenURL,
+		Scopes:         cfg.OidcClientScopes,
+		EndpointParams: url.Values{"audience": []string{cfg.OidcAudienceEndpoint}},
+	}
+
+	oAuthclient := oauthConfig.Client(ctx)
+	client.Transport = oAuthclient.Transport
+	client.Jar = oAuthclient.Jar
+
+	return client, nil
 }
 
 // Sets a logger on the controller
