@@ -19,20 +19,22 @@ import (
 
 const (
 	pkgHTTPController = "events/httpcontroller"
-	// count of times to retry a query (300 * 30 = 2.5h is how long we'll keep trying)
-	queryRetries = 300
-	// query timeout duration
-	queryTimeout = 10 * time.Second
+	// max number of times times to retry the Orc API queries
+	// 300 * 30s = 2.5h
+	orcQueryRetries = 300
+
 	// query interval duration
 	queryInterval = 30 * time.Second
 )
 
 var (
-	ErrHandlerInit   = errors.New("error initializing handler")
-	ErrEmptyResponse = errors.New("empty response with error")
-	ErrRetryRequest  = errors.New("request retry required")
-	ErrNoCondition   = errors.New("no condition available")
-	ErrNoWork        = errors.New("no Condition or Task identified for work")
+	ErrHandlerInit    = errors.New("error initializing handler")
+	ErrEmptyResponse  = errors.New("empty response with error")
+	errRetryRequest   = errors.New("request retry required")
+	ErrNoCondition    = errors.New("no condition available")
+	errNothingToDo    = errors.New("nothing to do here")
+	errFetchTask      = errors.New("error fetching Task object")
+	errFetchCondition = errors.New("error fetching Condition object")
 )
 
 // HTTPController implements the TaskHandler interface to interact with the NATS queue, KV over HTTP(s)
@@ -70,12 +72,12 @@ func NewHTTPController(
 	logger.Formatter = &logrus.JSONFormatter{}
 
 	nhc := &HTTPController{
-		facilityCode:  facilityCode,
-		serverID:      serverID,
-		conditionKind: conditionKind,
-		queryRetries:  queryRetries,
-		queryInterval: queryInterval,
-		logger:        logger,
+		facilityCode:    facilityCode,
+		serverID:        serverID,
+		conditionKind:   conditionKind,
+		orcQueryRetries: orcQueryRetries,
+		queryInterval:   queryInterval,
+		logger:          logger,
 	}
 
 	for _, opt := range options {
@@ -150,9 +152,24 @@ func (n *HTTPController) Run(ctx context.Context, handler TaskHandler) error {
 
 	var err error
 
-	task, err := n.fetchWorkWithRetries(ctx, n.serverID, n.queryRetries, n.queryInterval)
+	task, err := n.fetchTaskWithRetries(ctx, n.serverID, n.orcQueryRetries, n.queryInterval)
 	if err != nil {
 		return errors.Wrap(ErrHandlerInit, err.Error())
+	}
+
+	// init publisher
+	publisher := NewHTTPPublisher(n.serverID, task.ID, n.conditionKind, n.orcQueryor, n.logger)
+	if task.State == condition.Pending {
+		task.Status.Append("In process by inband controller: " + n.serverID.String())
+	} else {
+		task.Status.Append("resumed by inband controller: " + n.serverID.String())
+	}
+
+	if errPublish := publisher.Publish(ctx, task, false); errPublish != nil {
+		msg := "error publishing initial Task, Status KV record, condition aborted"
+		n.logger.WithError(errPublish).WithFields(logrus.Fields{
+			"conditionID": task.ID.String(),
+		}).Error(msg)
 	}
 
 	// set remote span context
@@ -169,28 +186,27 @@ func (n *HTTPController) Run(ctx context.Context, handler TaskHandler) error {
 		defer span.End()
 	}
 
-	return n.runTaskWithMonitor(ctx, handler, task)
+	return n.runTaskWithMonitor(ctx, handler, task, publisher, statusInterval)
 }
 
 func (n *HTTPController) runTaskWithMonitor(
 	ctx context.Context,
 	handler TaskHandler,
 	task *condition.Task[any, any],
+	publisher Publisher,
+	publishInterval time.Duration,
 ) error {
 	ctx, span := otel.Tracer(pkgHTTPController).Start(
 		ctx,
-		"runWithMonitor",
+		"runTaskWithMonitor",
 	)
 	defer span.End()
 	// doneCh indicates the handler run completed
 	doneCh := make(chan bool)
 
-	// init publisher
-	publisher := NewHTTPPublisher(n.serverID, task.ID, n.conditionKind, controllerID, n.orcQueryor, n.logger)
-
 	// monitor updates TS on status until the task handler returns.
 	monitor := func() {
-		ticker := time.NewTicker(statusInterval)
+		ticker := time.NewTicker(publishInterval)
 		defer ticker.Stop()
 
 		// periodically update the LastUpdate TS in status KV,
@@ -226,7 +242,6 @@ func (n *HTTPController) runTaskWithMonitor(
 	)
 
 	publish := func(state condition.State, status string) {
-
 		// append to existing status record, unless it was overwritten by the controller somehow
 		task.Status.Append(status)
 		task.State = state
@@ -252,15 +267,13 @@ func (n *HTTPController) runTaskWithMonitor(
 		}
 	}() // nolint:errcheck // nope
 
-	if task.State == condition.Pending {
-		task.State = condition.Active
-		publish(condition.Active, "controller initialized")
-	}
-
-	task.Status.Append("controller initialized")
 	logger.Info("Controller initialized, running task..")
 
-	if err := handler.HandleTask(ctx, task, publisher); err != nil {
+	// set handler timeout
+	handlerCtx, cancel := context.WithTimeout(ctx, n.handlerTimeout)
+	defer cancel()
+
+	if err := handler.HandleTask(handlerCtx, task, publisher); err != nil {
 		task.Status.Append("controller returned error: " + err.Error())
 		task.State = condition.Failed
 
@@ -286,18 +299,8 @@ func sleepWithContext(ctx context.Context, t time.Duration) error {
 	}
 }
 
-// fetchWorkWithRetries attempts to fetch the Condition and Task objects.
-//
-// If the Condition object is available that indicates this is first request, because the Condition is pop'ed from the queue.
-// if the controller restarts, it will only have access to the Task object going ahead.
-//
-// The Task object is the runtime information for a Condition, and its available as long as the Task is in an incomplete state.
-func (n *HTTPController) fetchWorkWithRetries(ctx context.Context, serverID uuid.UUID, tries int, interval time.Duration) (*condition.Task[any, any], error) {
-	var task *condition.Task[any, any]
-	var cond *condition.Condition
-
+func (n *HTTPController) fetchTaskWithRetries(ctx context.Context, serverID uuid.UUID, tries int, interval time.Duration) (*condition.Task[any, any], error) {
 	for attempt := 0; attempt <= tries; attempt++ {
-		var err error
 		le := n.logger.WithField("attempt", fmt.Sprintf("%d/%d", attempt, tries))
 
 		if attempt > 0 {
@@ -307,110 +310,113 @@ func (n *HTTPController) fetchWorkWithRetries(ctx context.Context, serverID uuid
 			}
 		}
 
-		if cond == nil {
-			// fetch condition
-			le.Info("Fetching Condition..")
-			cond, err = n.fetchCondition(ctx, serverID)
-			if err != nil {
-				le.WithError(err).Warn("Condition fetch error")
-			} else {
-				le.WithFields(logrus.Fields{"ID": cond.ID, "Kind": cond.Kind}).Info("Condition retrieved")
+		// fetch condition
+		le.Info("Fetching Condition..")
+		cond, err := n.fetchCondition(ctx, serverID)
+		if err != nil {
+			le.WithError(err).Warn("Condition fetch error")
+			if errors.Is(err, errRetryRequest) {
+				continue
 			}
-		} else {
-			le.WithField("condition.id", cond.ID).Info("Condition was fetched")
+
+			return nil, err
 		}
 
-		le.Info("Fetching Task..")
-		// fetch task and don't proceed until that is available.
-		task, err = n.fetchTask(ctx, serverID)
-		if err != nil {
-			le.WithError(err).Info("retrying...")
+		// kind matches configured
+		if cond.Kind != n.conditionKind {
+			le.WithFields(logrus.Fields{
+				"conditionID": cond.ID,
+				"received":    cond.Kind,
+				"expect":      n.conditionKind,
+				"state":       cond.State,
+			}).Debug("waiting for configured condition kind...")
+
 			continue
 		}
 
-		le.WithFields(logrus.Fields{"id": task.ID, "kind": task.Kind, "state": task.State}).Info("Condition Task retrieved")
-		break
+		// state finalized
+		if condition.StateIsComplete(cond.State) {
+			le.WithFields(logrus.Fields{
+				"conditionID": cond.ID,
+				"received":    cond.Kind,
+				"expect":      n.conditionKind,
+				"state":       cond.State,
+			}).Info("condition state is final, nothing to do here.")
+
+			return nil, errNothingToDo
+		}
+
+		// state pending
+		if cond.State == condition.Pending {
+			return condition.NewTaskFromCondition(cond), nil
+		}
+
+		// state active
+		if cond.State == condition.Active {
+			task, errFetch := n.fetchTask(ctx, serverID)
+			if errFetch != nil {
+				le.WithError(errFetch).Warn("Task fetch error")
+				if errors.Is(errFetch, errRetryRequest) {
+					continue
+				}
+
+				return nil, errFetch
+			}
+
+			return task, nil
+		}
 	}
 
-	// max attempts reached, no task or condition retrieved
-	if cond == nil && task == nil {
-		return nil, ErrNoWork
-	}
-
-	return task, nil
+	return nil, errNothingToDo
 }
 
-// first attempt to fetch a queued Condition, if none exists attempt to fetch the Task
+// fetch condition - this will retrieve the current active/pending condition
 func (n *HTTPController) fetchCondition(ctx context.Context, serverID uuid.UUID) (*condition.Condition, error) {
-	// if its a 404 || bad request just return
-	errFetchCondition := errors.New("error fetching condition from queue")
-
-	resp, err := n.orcQueryor.ConditionQueuePop(ctx, n.conditionKind, serverID)
+	resp, err := n.orcQueryor.ConditionQuery(ctx, serverID)
 	if err != nil {
 		return nil, errors.Wrap(errFetchCondition, err.Error())
 	}
 
 	if resp == nil {
-		return nil, errors.Wrap(errFetchCondition, "unexpected empty response")
+		return nil, errors.Wrap(errRetryRequest, "unexpected empty response")
 	}
 
 	switch resp.StatusCode {
 	case http.StatusOK:
-		return n.conditionFromResponse(resp)
-	case http.StatusNotFound:
-		return nil, errors.Wrap(ErrNoCondition, "404, no task found")
-	case http.StatusInternalServerError, http.StatusServiceUnavailable:
-		return nil, errors.Wrap(ErrRetryRequest, fmt.Sprintf("%d, message: %s", resp.StatusCode, resp.Message))
+		if resp.Condition == nil {
+			return nil, errors.Wrap(errFetchCondition, "got nil object")
+		}
+		return resp.Condition, nil
+	case http.StatusNotFound, http.StatusInternalServerError:
+		return nil, errors.Wrap(errRetryRequest, fmt.Sprintf("%d, message: %s", resp.StatusCode, resp.Message))
 	case http.StatusBadRequest:
-		return nil, errors.Wrap(ErrRetryRequest, fmt.Sprintf("%d, message: %s", resp.StatusCode, resp.Message))
+		return nil, errors.Wrap(errFetchCondition, fmt.Sprintf("%d, message: %s", resp.StatusCode, resp.Message))
 	default:
 		return nil, errors.Wrap(errFetchCondition, fmt.Sprintf("unexpected status code %d, message: %s", resp.StatusCode, resp.Message))
 	}
 }
 
-func (n *HTTPController) conditionFromResponse(resp *types.ServerResponse) (*condition.Condition, error) {
-	errNoCondition := errors.New("no Condition object in response")
-
-	if resp.Condition == nil {
-		return nil, errNoCondition
-	}
-
-	return resp.Condition, nil
-}
-
-// TODO: reuse the ConditionTaskRepository interface for this
 func (n *HTTPController) fetchTask(ctx context.Context, serverID uuid.UUID) (*condition.Task[any, any], error) {
-	errFetchTask := errors.New("error fetching Condition Task from queue")
-
 	resp, err := n.orcQueryor.ConditionTaskQuery(ctx, n.conditionKind, serverID)
 	if err != nil {
 		return nil, errors.Wrap(errFetchTask, err.Error())
 	}
 
 	if resp == nil {
-		return nil, errors.Wrap(errFetchTask, "unexpected empty response")
+		return nil, errors.Wrap(errRetryRequest, "unexpected empty response")
 	}
 
 	switch resp.StatusCode {
 	case http.StatusOK:
-		return n.taskFromResponse(resp)
-	case http.StatusNotFound:
-		return nil, errors.Wrap(errFetchTask, "404, no task found")
-	case http.StatusInternalServerError, http.StatusServiceUnavailable:
-		return nil, errors.Wrap(ErrRetryRequest, fmt.Sprintf("%d, message: %s", resp.StatusCode, resp.Message))
+		if resp.Task == nil {
+			return nil, errors.Wrap(errFetchTask, "got nil object")
+		}
+		return resp.Task, nil
+	case http.StatusNotFound, http.StatusInternalServerError, http.StatusUnprocessableEntity:
+		return nil, errors.Wrap(errRetryRequest, fmt.Sprintf("%d, message: %s", resp.StatusCode, resp.Message))
 	case http.StatusBadRequest:
 		return nil, errors.Wrap(errFetchTask, fmt.Sprintf("%d, message: %s", resp.StatusCode, resp.Message))
 	default:
 		return nil, errors.Wrap(errFetchTask, fmt.Sprintf("unexpected status code %d, message: %s", resp.StatusCode, resp.Message))
 	}
-}
-
-func (n *HTTPController) taskFromResponse(resp *types.ServerResponse) (*condition.Task[any, any], error) {
-	errNoTask := errors.New("no Task object in response")
-
-	if resp.Task == nil {
-		return nil, errNoTask
-	}
-
-	return resp.Task, nil
 }
