@@ -545,8 +545,8 @@ func (n *NatsController) runTaskHandlerWithMonitor(ctx context.Context, task *co
 	defer span.End()
 
 	// local publish helper method
-	publish := func(state condition.State, status string, tsUpdate bool) {
-		if !tsUpdate {
+	publish := func(state condition.State, status string, tsUpdateOnly bool) {
+		if !tsUpdateOnly {
 			// append to existing status record, unless it was overwritten by the controller somehow
 			task.Status.Append(status)
 			task.State = state
@@ -555,7 +555,7 @@ func (n *NatsController) runTaskHandlerWithMonitor(ctx context.Context, task *co
 		if errPublish := publisher.Publish(
 			ctx,
 			task,
-			tsUpdate,
+			tsUpdateOnly,
 		); errPublish != nil {
 			n.logger.WithError(errPublish).Error("failed to publish update")
 		}

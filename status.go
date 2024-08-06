@@ -166,7 +166,7 @@ func (s *NatsConditionStatusPublisher) Publish(ctx context.Context, serverID str
 	return nil
 }
 
-func (s *NatsConditionStatusPublisher) update(key string, newStatusValue *condition.StatusValue, onlyTimestamp bool) (uint64, error) {
+func (s *NatsConditionStatusPublisher) update(key string, newStatusValue *condition.StatusValue, tsUpdateOnly bool) (uint64, error) {
 	// fetch current status value from KV
 	entry, err := s.kv.Get(key)
 	if err != nil {
@@ -183,7 +183,7 @@ func (s *NatsConditionStatusPublisher) update(key string, newStatusValue *condit
 	}
 
 	var update *condition.StatusValue
-	if onlyTimestamp {
+	if tsUpdateOnly {
 		// timestamp only update
 		curStatusValue.UpdatedAt = time.Now()
 		update = curStatusValue

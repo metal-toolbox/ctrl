@@ -17,7 +17,7 @@ import (
 //
 // Subsequently the Task updates is all that is to be published, replacing the statusValue updates.
 type Publisher interface {
-	Publish(ctx context.Context, task *condition.Task[any, any], tsUpdate bool) error
+	Publish(ctx context.Context, task *condition.Task[any, any], tsUpdateOnly bool) error
 }
 
 type PublisherHTTP struct {
@@ -55,14 +55,14 @@ func NewHTTPPublisher(serverID,
 	return p
 }
 
-func (p *PublisherHTTP) Publish(ctx context.Context, task *condition.Task[any, any], tsUpdate bool) error {
-	err := p.statusValuePublisher.Publish(ctx, task.Server.ID, task.State, task.Status.MustMarshal(), tsUpdate)
+func (p *PublisherHTTP) Publish(ctx context.Context, task *condition.Task[any, any], tsUpdateOnly bool) error {
+	err := p.statusValuePublisher.Publish(ctx, task.Server.ID, task.State, task.Status.MustMarshal(), tsUpdateOnly)
 	if err != nil {
 		p.logger.WithError(err).Error("Status Value publish error")
 		return err
 	}
 
-	err = p.taskRepository.Publish(ctx, task, tsUpdate)
+	err = p.taskRepository.Publish(ctx, task, tsUpdateOnly)
 	if err != nil {
 		p.logger.WithError(err).Error("Task publish error")
 		return err
@@ -124,14 +124,14 @@ func NewNatsPublisher(
 	return p, nil
 }
 
-func (p *PublisherNATS) Publish(ctx context.Context, task *condition.Task[any, any], tsUpdate bool) error {
-	err := p.statusValuePublisher.Publish(ctx, task.Server.ID, task.State, task.Status.MustMarshal(), tsUpdate)
+func (p *PublisherNATS) Publish(ctx context.Context, task *condition.Task[any, any], tsUpdateOnly bool) error {
+	err := p.statusValuePublisher.Publish(ctx, task.Server.ID, task.State, task.Status.MustMarshal(), tsUpdateOnly)
 	if err != nil {
 		p.logger.WithError(err).Error("Status Value publish error")
 		return err
 	}
 
-	err = p.taskRepository.Publish(ctx, task, tsUpdate)
+	err = p.taskRepository.Publish(ctx, task, tsUpdateOnly)
 	if err != nil {
 		p.logger.WithError(err).Error("Task publish error")
 		return err
