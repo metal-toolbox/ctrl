@@ -73,7 +73,7 @@ func NewNatsConditionTaskRepository(
 		conditionKind: conditionKind,
 		controllerID:  controllerID.String(),
 		serverID:      serverID,
-		bucketName:    string(conditionKind),
+		bucketName:    condition.TaskKVRepositoryBucket,
 		log:           logger,
 	}
 
