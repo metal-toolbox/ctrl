@@ -110,42 +110,42 @@ func TestStateFinalized(t *testing.T) {
 			conditionID:  uuid.New(),
 			state:        inProgress,
 			expectMethod: "inProgress",
-			expectBool:   false,
+			expectBool:   true,
 		},
 		{
 			name:         "Condition complete",
 			conditionID:  uuid.New(),
 			state:        complete,
 			expectMethod: "complete",
-			expectBool:   false,
+			expectBool:   true,
 		},
 		{
 			name:         "Condition orphaned",
 			conditionID:  uuid.New(),
 			state:        orphaned,
 			expectMethod: "inProgress",
-			expectBool:   true,
+			expectBool:   false,
 		},
 		{
 			name:         "Condition not started",
 			conditionID:  uuid.New(),
 			state:        notStarted,
 			expectMethod: "inProgress",
-			expectBool:   true,
+			expectBool:   false,
 		},
 		{
 			name:         "Condition state indeterminate",
 			conditionID:  uuid.New(),
 			state:        indeterminate,
 			expectMethod: "nak",
-			expectBool:   false,
+			expectBool:   true,
 		},
 		{
 			name:         "Condition state unexpected",
 			conditionID:  uuid.New(),
 			state:        99, // unexpected lifecycle state
 			expectMethod: "complete",
-			expectBool:   false,
+			expectBool:   true,
 		},
 	}
 
