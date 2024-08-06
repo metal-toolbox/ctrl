@@ -23,9 +23,9 @@ func (_m *MockPublisher) EXPECT() *MockPublisher_Expecter {
 	return &MockPublisher_Expecter{mock: &_m.Mock}
 }
 
-// Publish provides a mock function with given fields: ctx, task, tsUpdate
-func (_m *MockPublisher) Publish(ctx context.Context, task *condition.Task[interface{}, interface{}], tsUpdate bool) error {
-	ret := _m.Called(ctx, task, tsUpdate)
+// Publish provides a mock function with given fields: ctx, task, tsUpdateOnly
+func (_m *MockPublisher) Publish(ctx context.Context, task *condition.Task[interface{}, interface{}], tsUpdateOnly bool) error {
+	ret := _m.Called(ctx, task, tsUpdateOnly)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Publish")
@@ -33,7 +33,7 @@ func (_m *MockPublisher) Publish(ctx context.Context, task *condition.Task[inter
 
 	var r0 error
 	if rf, ok := ret.Get(0).(func(context.Context, *condition.Task[interface{}, interface{}], bool) error); ok {
-		r0 = rf(ctx, task, tsUpdate)
+		r0 = rf(ctx, task, tsUpdateOnly)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -49,12 +49,12 @@ type MockPublisher_Publish_Call struct {
 // Publish is a helper method to define mock.On call
 //   - ctx context.Context
 //   - task *condition.Task[interface{},interface{}]
-//   - tsUpdate bool
-func (_e *MockPublisher_Expecter) Publish(ctx interface{}, task interface{}, tsUpdate interface{}) *MockPublisher_Publish_Call {
-	return &MockPublisher_Publish_Call{Call: _e.mock.On("Publish", ctx, task, tsUpdate)}
+//   - tsUpdateOnly bool
+func (_e *MockPublisher_Expecter) Publish(ctx interface{}, task interface{}, tsUpdateOnly interface{}) *MockPublisher_Publish_Call {
+	return &MockPublisher_Publish_Call{Call: _e.mock.On("Publish", ctx, task, tsUpdateOnly)}
 }
 
-func (_c *MockPublisher_Publish_Call) Run(run func(ctx context.Context, task *condition.Task[interface{}, interface{}], tsUpdate bool)) *MockPublisher_Publish_Call {
+func (_c *MockPublisher_Publish_Call) Run(run func(ctx context.Context, task *condition.Task[interface{}, interface{}], tsUpdateOnly bool)) *MockPublisher_Publish_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		run(args[0].(context.Context), args[1].(*condition.Task[interface{}, interface{}]), args[2].(bool))
 	})

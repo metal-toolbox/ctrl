@@ -4,6 +4,7 @@ packages:
   github.com/metal-toolbox/ctrl:
     config:
       fileName: "mock_{{.InterfaceName | firstLower}}.go"
+      dir: "."
       inpackage: True
     interfaces:
       TaskHandler:
