@@ -409,28 +409,28 @@ func (n *NatsController) stateFinalized(
 		eventAcknowleger.inProgress()
 		spanEvent(span, cond, n.ID(), "ackInProgress")
 
-		return false
+		return true
 
 	case complete:
 		le.Info("condition is complete")
 		eventAcknowleger.complete()
 		spanEvent(span, cond, n.ID(), "ackComplete")
 
-		return false
+		return true
 
 	case orphaned:
 		le.Info("restarting this condition")
 		eventAcknowleger.inProgress()
 		spanEvent(span, cond, n.ID(), "restarting condition")
 
-		return true
+		return false
 
 	case notStarted:
 		le.Info("starting new condition")
 		eventAcknowleger.inProgress()
 		spanEvent(span, cond, n.ID(), "start new condition")
 
-		return true
+		return false
 
 	// break out here, this is a new event
 	case indeterminate:
@@ -439,14 +439,14 @@ func (n *NatsController) stateFinalized(
 		eventAcknowleger.nak()
 		spanEvent(span, cond, n.ID(), "sent nack, indeterminate state")
 
-		return false
+		return true
 
 	default:
 		le.Warn("unexpected state")
 		eventAcknowleger.complete()
 		spanEvent(span, cond, n.ID(), "ackComplete")
 
-		return false
+		return true
 	}
 }
 
