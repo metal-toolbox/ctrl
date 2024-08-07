@@ -204,9 +204,9 @@ func (n *HTTPController) Run(ctx context.Context, handler TaskHandler) error {
 	// init publisher
 	publisher := NewHTTPPublisher(n.serverID, task.ID, n.conditionKind, n.orcQueryor, n.logger)
 	if task.State == condition.Pending {
-		task.Status.Append("In process by inband controller: " + n.serverID.String())
+		task.Status.Append("In process by controller: " + n.serverID.String())
 	} else {
-		task.Status.Append("resumed by inband controller: " + n.serverID.String())
+		task.Status.Append("resumed by controller: " + n.serverID.String())
 	}
 
 	if errPublish := publisher.Publish(ctx, task, false); errPublish != nil {
