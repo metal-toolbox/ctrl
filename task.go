@@ -96,7 +96,6 @@ func NewNatsConditionTaskRepository(
 
 	// verify existing TaskID matches ConditionID and task is not active
 	if currTaskEntry != nil {
-		repo.lastRev = currTaskEntry.Revision()
 		currTask, err := condition.TaskFromMessage(currTaskEntry.Value())
 		if err != nil {
 			return nil, errors.Wrap(
@@ -126,6 +125,8 @@ func NewNatsConditionTaskRepository(
 					fmt.Sprintf("key: %s, error: %s", key, err.Error()),
 				)
 			}
+		} else {
+			repo.lastRev = currTaskEntry.Revision()
 		}
 	}
 
