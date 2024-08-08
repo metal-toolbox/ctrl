@@ -110,6 +110,8 @@ func TestNewNatsConditionTaskRepository(t *testing.T) {
 				key := condition.TaskKVRepositoryKey(facilityCode, conditionKind, serverID)
 				_, err := taskRepo.kv.Get(key)
 				assert.ErrorIs(t, err, nats.ErrKeyNotFound)
+				// purged task has no revision set
+				assert.Zero(t, taskRepo.lastRev)
 			},
 		},
 		{
