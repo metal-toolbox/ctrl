@@ -459,11 +459,13 @@ type HTTPConditionStatusPublisher struct {
 	logger        *logrus.Logger
 	orcQueryor    orc.Queryor
 	conditionKind condition.Kind
+	controllerID  registry.ControllerID
 	conditionID   uuid.UUID
 	serverID      uuid.UUID
 }
 
 func NewHTTPConditionStatusPublisher(
+	appName string,
 	serverID,
 	conditionID uuid.UUID,
 	conditionKind condition.Kind,
@@ -471,6 +473,7 @@ func NewHTTPConditionStatusPublisher(
 	logger *logrus.Logger,
 ) ConditionStatusPublisher {
 	return &HTTPConditionStatusPublisher{
+		controllerID:  registry.GetIDWithUUID(appName, serverID),
 		orcQueryor:    orcQueryor,
 		conditionID:   conditionID,
 		conditionKind: conditionKind,
@@ -488,7 +491,7 @@ func (s *HTTPConditionStatusPublisher) Publish(ctx context.Context, serverID str
 	defer span.End()
 
 	sv := &condition.StatusValue{
-		WorkerID:  serverID,
+		WorkerID:  s.controllerID.String(),
 		Target:    serverID,
 		TraceID:   trace.SpanFromContext(ctx).SpanContext().TraceID().String(),
 		SpanID:    trace.SpanFromContext(ctx).SpanContext().SpanID().String(),
@@ -511,7 +514,8 @@ func (s *HTTPConditionStatusPublisher) Publish(ctx context.Context, serverID str
 
 	s.logger.WithFields(
 		logrus.Fields{
-			"status": resp.StatusCode,
+			"status":       resp.StatusCode,
+			"controllerID": sv.WorkerID,
 		},
 	).Trace("condition status update published successfully")
 
