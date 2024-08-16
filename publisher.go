@@ -26,13 +26,16 @@ type PublisherHTTP struct {
 	taskRepository       *HTTPTaskRepository
 }
 
-func NewHTTPPublisher(serverID,
+func NewHTTPPublisher(
+	appName string,
+	serverID,
 	conditionID uuid.UUID,
 	conditionKind condition.Kind,
 	orcQueryor orc.Queryor,
 	logger *logrus.Logger) Publisher {
 	p := &PublisherHTTP{logger: logger}
 	httpStatusValuePublisher := NewHTTPConditionStatusPublisher(
+		appName,
 		serverID,
 		conditionID,
 		conditionKind,
@@ -43,6 +46,7 @@ func NewHTTPPublisher(serverID,
 	p.statusValuePublisher = httpStatusValuePublisher.(*HTTPConditionStatusPublisher)
 
 	httpTaskRepository := NewHTTPTaskRepository(
+		appName,
 		serverID,
 		conditionID,
 		conditionKind,
