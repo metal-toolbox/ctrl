@@ -43,6 +43,7 @@ var (
 
 // HTTPController implements the TaskHandler interface to interact with the NATS queue, KV over HTTP(s)
 type HTTPController struct {
+	appName         string
 	logger          *logrus.Logger
 	facilityCode    string
 	serverID        uuid.UUID
@@ -68,6 +69,7 @@ type OrchestratorAPIConfig struct {
 type OptionHTTPController func(*HTTPController)
 
 func NewHTTPController(
+	appName,
 	facilityCode string,
 	serverID uuid.UUID,
 	conditionKind condition.Kind,
@@ -78,6 +80,7 @@ func NewHTTPController(
 	logger.Formatter = &logrus.JSONFormatter{}
 
 	nhc := &HTTPController{
+		appName:         appName,
 		facilityCode:    facilityCode,
 		serverID:        serverID,
 		conditionKind:   conditionKind,
@@ -202,7 +205,7 @@ func (n *HTTPController) Run(ctx context.Context, handler TaskHandler) error {
 	}
 
 	// init publisher
-	publisher := NewHTTPPublisher(n.serverID, task.ID, n.conditionKind, n.orcQueryor, n.logger)
+	publisher := NewHTTPPublisher(n.appName, n.serverID, task.ID, n.conditionKind, n.orcQueryor, n.logger)
 	if task.State == condition.Pending {
 		task.Status.Append("In process by controller: " + n.serverID.String())
 	} else {
@@ -214,6 +217,8 @@ func (n *HTTPController) Run(ctx context.Context, handler TaskHandler) error {
 		n.logger.WithError(errPublish).WithFields(logrus.Fields{
 			"conditionID": task.ID.String(),
 		}).Error(msg)
+
+		return errors.Wrap(errPublish, msg)
 	}
 
 	// set remote span context
