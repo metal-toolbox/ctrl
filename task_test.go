@@ -611,6 +611,7 @@ func TestHTTPTaskRepository_Publish(t *testing.T) {
 	conditionKind := condition.FirmwareInstall
 
 	repo := &HTTPTaskRepository{
+		controllerID:  registry.GetIDWithUUID("test", serverID),
 		conditionID:   conditionID,
 		conditionKind: conditionKind,
 		serverID:      serverID,

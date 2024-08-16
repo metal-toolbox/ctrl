@@ -524,6 +524,7 @@ func TestHTTPConditionStatusPublisher_Publish(t *testing.T) {
 	conditionKind := condition.FirmwareInstall
 
 	publisher := &HTTPConditionStatusPublisher{
+		controllerID:  registry.GetIDWithUUID("test", serverID),
 		conditionID:   conditionID,
 		conditionKind: conditionKind,
 		serverID:      serverID,

@@ -291,10 +291,12 @@ type HTTPTaskRepository struct {
 	orcQueryor    orc.Queryor
 	conditionKind condition.Kind
 	conditionID   uuid.UUID
+	controllerID  registry.ControllerID
 	serverID      uuid.UUID
 }
 
 func NewHTTPTaskRepository(
+	appName string,
 	serverID,
 	conditionID uuid.UUID,
 	conditionKind condition.Kind,
@@ -305,6 +307,7 @@ func NewHTTPTaskRepository(
 		orcQueryor:    orcQueryor,
 		conditionID:   conditionID,
 		conditionKind: conditionKind,
+		controllerID:  registry.GetIDWithUUID(appName, serverID),
 		serverID:      serverID,
 		logger:        logger,
 	}
@@ -318,6 +321,10 @@ func (h *HTTPTaskRepository) Publish(ctx context.Context, task *condition.Task[a
 		trace.WithSpanKind(trace.SpanKindConsumer),
 	)
 	defer span.End()
+
+	if task.WorkerID == "" {
+		task.WorkerID = h.controllerID.String()
+	}
 
 	resp, err := h.orcQueryor.ConditionTaskPublish(ctx, h.conditionKind, h.serverID, h.conditionID, task, tsUpdateOnly)
 	if err != nil {
