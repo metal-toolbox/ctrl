@@ -6,7 +6,7 @@ require (
 	github.com/coreos/go-oidc v2.2.1+incompatible
 	github.com/google/uuid v1.6.0
 	github.com/metal-toolbox/conditionorc v1.1.1-0.20240805163108-b1c018c91b87
-	github.com/metal-toolbox/rivets v1.2.1-0.20240816124954-75fd3d3b2629
+	github.com/metal-toolbox/rivets v1.3.1
 	github.com/nats-io/nats-server/v2 v2.10.12
 	github.com/nats-io/nats.go v1.36.0
 	github.com/pkg/errors v0.9.1
