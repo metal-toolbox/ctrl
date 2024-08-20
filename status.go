@@ -483,7 +483,7 @@ func NewHTTPConditionStatusPublisher(
 }
 
 func (s *HTTPConditionStatusPublisher) Publish(ctx context.Context, serverID string, state condition.State, status json.RawMessage, tsUpdateOnly bool) error {
-	_, span := otel.Tracer(pkgName).Start(
+	ctx, span := otel.Tracer(pkgName).Start(
 		ctx,
 		"controller.status_http.Publish",
 		trace.WithSpanKind(trace.SpanKindConsumer),

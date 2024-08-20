@@ -315,7 +315,7 @@ func NewHTTPTaskRepository(
 
 // Publish implements the ConditionTaskRepository interface to record Task information in the Task KV.
 func (h *HTTPTaskRepository) Publish(ctx context.Context, task *condition.Task[any, any], tsUpdateOnly bool) error {
-	_, span := otel.Tracer(pkgName).Start(
+	ctx, span := otel.Tracer(pkgName).Start(
 		ctx,
 		"controller.task_http.Publish",
 		trace.WithSpanKind(trace.SpanKindConsumer),
@@ -351,7 +351,7 @@ func (h *HTTPTaskRepository) Publish(ctx context.Context, task *condition.Task[a
 func (h *HTTPTaskRepository) Query(ctx context.Context) (*condition.Task[any, any], error) {
 	errNoTask := errors.New("no Task object in response")
 
-	_, span := otel.Tracer(pkgName).Start(
+	ctx, span := otel.Tracer(pkgName).Start(
 		ctx,
 		"controller.task_http.Query",
 		trace.WithSpanKind(trace.SpanKindConsumer),
