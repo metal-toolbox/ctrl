@@ -432,6 +432,10 @@ func (n *HTTPController) fetchTaskWithRetries(ctx context.Context, serverID uuid
 func (n *HTTPController) fetchCondition(ctx context.Context, serverID uuid.UUID) (*condition.Condition, error) {
 	resp, err := n.orcQueryor.ConditionQuery(ctx, serverID)
 	if err != nil {
+		if strings.Contains(err.Error(), "EOF") {
+			return nil, errors.Wrap(errRetryRequest, "unexpected empty response")
+		}
+
 		return nil, errors.Wrap(errFetchCondition, err.Error())
 	}
 
@@ -457,6 +461,10 @@ func (n *HTTPController) fetchCondition(ctx context.Context, serverID uuid.UUID)
 func (n *HTTPController) fetchTask(ctx context.Context, serverID uuid.UUID) (*condition.Task[any, any], error) {
 	resp, err := n.orcQueryor.ConditionTaskQuery(ctx, n.conditionKind, serverID)
 	if err != nil {
+		if strings.Contains(err.Error(), "EOF") {
+			return nil, errors.Wrap(errRetryRequest, "unexpected empty response")
+		}
+
 		return nil, errors.Wrap(errFetchTask, err.Error())
 	}
 
