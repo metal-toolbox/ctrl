@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"runtime/debug"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -29,6 +30,9 @@ const (
 
 	// query interval duration
 	queryInterval = 30 * time.Second
+
+	// Orchestrator API query timeout
+	orcQueryTimeout = 60 * time.Second
 )
 
 var (
@@ -85,6 +89,7 @@ func NewHTTPController(
 		serverID:        serverID,
 		conditionKind:   conditionKind,
 		orcQueryRetries: orcQueryRetries,
+		handlerTimeout:  handlerTimeout,
 		queryInterval:   queryInterval,
 		logger:          logger,
 	}
@@ -107,8 +112,11 @@ func NewHTTPController(
 
 func newConditionsAPIClient(cfg *OrchestratorAPIConfig) (orc.Queryor, error) {
 	if cfg.AuthDisabled {
+		client := http.DefaultClient
+		client.Timeout = orcQueryTimeout
 		return orc.NewClient(
 			cfg.Endpoint,
+			orc.WithHTTPClient(client),
 		)
 	}
 
@@ -130,13 +138,14 @@ func newOAuthClient(cfg *OrchestratorAPIConfig) (*http.Client, error) {
 
 	// otel http client
 	client := otelhttp.DefaultClient
+	client.Timeout = orcQueryTimeout
 
 	// context for OIDC issuer endpoint query
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctxp, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	// setup oidc provider
-	provider, err := oidc.NewProvider(ctx, cfg.OidcIssuerEndpoint)
+	provider, err := oidc.NewProvider(ctxp, cfg.OidcIssuerEndpoint)
 	if err != nil {
 		return nil, errors.Wrap(errProvider, err.Error())
 	}
@@ -150,7 +159,7 @@ func newOAuthClient(cfg *OrchestratorAPIConfig) (*http.Client, error) {
 		EndpointParams: url.Values{"audience": []string{cfg.OidcAudienceEndpoint}},
 	}
 
-	oAuthclient := oauthConfig.Client(ctx)
+	oAuthclient := oauthConfig.Client(context.Background())
 	client.Transport = oAuthclient.Transport
 	client.Jar = oAuthclient.Jar
 
@@ -224,7 +233,7 @@ func (n *HTTPController) Run(ctx context.Context, handler TaskHandler) error {
 	// set remote span context
 	remoteSpanCtx, err := n.traceSpaceContextFromValues(task.TraceID, task.SpanID)
 	if err != nil {
-		n.logger.Warn(err.Error())
+		n.logger.Debug(err.Error())
 	} else {
 		// overwrite span context with remote span when available
 		var span trace.Span
