@@ -315,7 +315,7 @@ func NewHTTPTaskRepository(
 
 // Publish implements the ConditionTaskRepository interface to record Task information in the Task KV.
 func (h *HTTPTaskRepository) Publish(ctx context.Context, task *condition.Task[any, any], tsUpdateOnly bool) error {
-	ctx, span := otel.Tracer(pkgName).Start(
+	octx, span := otel.Tracer(pkgName).Start(
 		ctx,
 		"controller.task_http.Publish",
 		trace.WithSpanKind(trace.SpanKindConsumer),
@@ -326,7 +326,7 @@ func (h *HTTPTaskRepository) Publish(ctx context.Context, task *condition.Task[a
 		task.WorkerID = h.controllerID.String()
 	}
 
-	resp, err := h.orcQueryor.ConditionTaskPublish(ctx, h.conditionKind, h.serverID, h.conditionID, task, tsUpdateOnly)
+	resp, err := h.orcQueryor.ConditionTaskPublish(octx, h.conditionKind, h.serverID, h.conditionID, task, tsUpdateOnly)
 	if err != nil {
 		h.logger.WithError(err).Error("Task update error")
 		return errors.Wrap(errTaskPublish, err.Error())
@@ -351,14 +351,14 @@ func (h *HTTPTaskRepository) Publish(ctx context.Context, task *condition.Task[a
 func (h *HTTPTaskRepository) Query(ctx context.Context) (*condition.Task[any, any], error) {
 	errNoTask := errors.New("no Task object in response")
 
-	ctx, span := otel.Tracer(pkgName).Start(
+	octx, span := otel.Tracer(pkgName).Start(
 		ctx,
 		"controller.task_http.Query",
 		trace.WithSpanKind(trace.SpanKindConsumer),
 	)
 	defer span.End()
 
-	resp, err := h.orcQueryor.ConditionTaskQuery(ctx, h.conditionKind, h.serverID)
+	resp, err := h.orcQueryor.ConditionTaskQuery(octx, h.conditionKind, h.serverID)
 	if err != nil {
 		h.logger.WithError(err).Error("Task query error")
 		return nil, errors.Wrap(errTaskQuery, err.Error())
