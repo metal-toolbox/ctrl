@@ -3,10 +3,10 @@ package ctrl
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"runtime/debug"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -432,7 +432,7 @@ func (n *HTTPController) fetchTaskWithRetries(ctx context.Context, serverID uuid
 func (n *HTTPController) fetchCondition(ctx context.Context, serverID uuid.UUID) (*condition.Condition, error) {
 	resp, err := n.orcQueryor.ConditionQuery(ctx, serverID)
 	if err != nil {
-		if errors.Is(err, io.EOF) {
+		if strings.Contains(err.Error(), "EOF") {
 			return nil, errors.Wrap(errRetryRequest, "unexpected empty response")
 		}
 
@@ -461,7 +461,7 @@ func (n *HTTPController) fetchCondition(ctx context.Context, serverID uuid.UUID)
 func (n *HTTPController) fetchTask(ctx context.Context, serverID uuid.UUID) (*condition.Task[any, any], error) {
 	resp, err := n.orcQueryor.ConditionTaskQuery(ctx, n.conditionKind, serverID)
 	if err != nil {
-		if errors.Is(err, io.EOF) {
+		if strings.Contains(err.Error(), "EOF") {
 			return nil, errors.Wrap(errRetryRequest, "unexpected empty response")
 		}
 
