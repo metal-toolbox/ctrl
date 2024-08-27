@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/metal-toolbox/rivets/condition"
 	"github.com/metal-toolbox/rivets/events"
 	"github.com/nats-io/nats.go"
@@ -102,6 +103,8 @@ func NewNatsController(
 		concurrency:       concurrency,
 		natsConfig:        queueCfg,
 	}
+
+	logger.Tracef("NatsConfig: %s", spew.Sdump(queueCfg))
 
 	for _, opt := range options {
 		opt(nwp)
