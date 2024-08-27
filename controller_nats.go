@@ -103,17 +103,17 @@ func NewNatsController(
 		natsConfig:        queueCfg,
 	}
 
-	if logger.Level == logrus.TraceLevel {
-		b, err := json.MarshalIndent(queueCfg, "", "  ")
-		if err != nil {
-			logger.WithError(err).Errorf("NatsConfig (failed to pretty print): %+v", queueCfg)
-		} else {
-			logger.Tracef("NatsConfig: %s", string(b))
-		}
-	}
-
 	for _, opt := range options {
 		opt(nwp)
+	}
+
+	if nwp.logger.Level == logrus.TraceLevel {
+		b, err := json.MarshalIndent(queueCfg, "", "  ")
+		if err != nil {
+			nwp.logger.WithError(err).Errorf("NatsConfig (failed to pretty print): %+v", queueCfg)
+		} else {
+			fmt.Printf("NatsConfig: %s\n", string(b))
+		}
 	}
 
 	return nwp
