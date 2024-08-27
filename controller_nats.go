@@ -10,7 +10,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/metal-toolbox/rivets/condition"
 	"github.com/metal-toolbox/rivets/events"
 	"github.com/nats-io/nats.go"
@@ -104,7 +103,14 @@ func NewNatsController(
 		natsConfig:        queueCfg,
 	}
 
-	logger.Tracef("NatsConfig: %s", spew.Sdump(queueCfg))
+	if logger.Level == logrus.TraceLevel {
+		b, err := json.MarshalIndent(queueCfg, "", "  ")
+		if err != nil {
+			logger.WithError(err).Errorf("NatsConfig (failed to pretty print): %+v", queueCfg)
+		} else {
+			logger.Tracef("NatsConfig: %s", string(b))
+		}
+	}
 
 	for _, opt := range options {
 		opt(nwp)
