@@ -61,7 +61,6 @@ type HTTPController struct {
 type OrchestratorAPIConfig struct {
 	AuthDisabled         bool
 	Endpoint             string
-	AuthToken            string
 	OidcIssuerEndpoint   string
 	OidcAudienceEndpoint string
 	OidcClientSecret     string
@@ -128,7 +127,7 @@ func newConditionsAPIClient(cfg *OrchestratorAPIConfig) (orc.Queryor, error) {
 	return orc.NewClient(
 		cfg.Endpoint,
 		orc.WithHTTPClient(client),
-		orc.WithAuthToken(cfg.AuthToken),
+		orc.WithAuthToken(cfg.OidcClientSecret),
 	)
 }
 
