@@ -2,6 +2,7 @@ package ctrl
 
 import (
 	"context"
+	"errors"
 
 	"github.com/google/uuid"
 	"github.com/metal-toolbox/rivets/condition"
@@ -60,19 +61,20 @@ func NewHTTPPublisher(
 }
 
 func (p *PublisherHTTP) Publish(ctx context.Context, task *condition.Task[any, any], tsUpdateOnly bool) error {
-	err := p.statusValuePublisher.Publish(ctx, task.Server.ID, task.State, task.Status.MustMarshal(), tsUpdateOnly)
-	if err != nil {
-		p.logger.WithError(err).Error("Status Value publish error")
-		return err
+	var err error
+
+	if errSV := p.taskRepository.Publish(ctx, task, tsUpdateOnly); errSV != nil {
+		p.logger.WithError(errSV).Error("Task publish error")
+		err = errors.Join(err, errSV)
 	}
 
-	err = p.taskRepository.Publish(ctx, task, tsUpdateOnly)
-	if err != nil {
-		p.logger.WithError(err).Error("Task publish error")
-		return err
+	errTask := p.statusValuePublisher.Publish(ctx, task.Server.ID, task.State, task.Status.MustMarshal(), tsUpdateOnly)
+	if errTask != nil {
+		p.logger.WithError(errTask).Error("Status Value publish error")
+		err = errors.Join(err, errTask)
 	}
 
-	return nil
+	return err
 }
 
 type PublisherNATS struct {
@@ -129,17 +131,19 @@ func NewNatsPublisher(
 }
 
 func (p *PublisherNATS) Publish(ctx context.Context, task *condition.Task[any, any], tsUpdateOnly bool) error {
-	err := p.statusValuePublisher.Publish(ctx, task.Server.ID, task.State, task.Status.MustMarshal(), tsUpdateOnly)
-	if err != nil {
-		p.logger.WithError(err).Error("Status Value publish error")
-		return err
+	var err error
+
+	errTask := p.taskRepository.Publish(ctx, task, tsUpdateOnly)
+	if errTask != nil {
+		p.logger.WithError(errTask).Error("Task publish error")
+		err = errors.Join(err, errTask)
 	}
 
-	err = p.taskRepository.Publish(ctx, task, tsUpdateOnly)
-	if err != nil {
-		p.logger.WithError(err).Error("Task publish error")
-		return err
+	errSV := p.statusValuePublisher.Publish(ctx, task.Server.ID, task.State, task.Status.MustMarshal(), tsUpdateOnly)
+	if errSV != nil {
+		p.logger.WithError(errSV).Error("Status Value publish error")
+		err = errors.Join(err, errSV)
 	}
 
-	return nil
+	return err
 }
