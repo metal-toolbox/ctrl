@@ -179,7 +179,7 @@ func WithOrchestratorClient(c orc.Queryor) OptionHTTPController {
 	}
 }
 
-func (n *HTTPController) traceSpaceContextFromValues(traceID, spanID string) (trace.SpanContext, error) {
+func traceSpaceContextFromValues(traceID, spanID string) (trace.SpanContext, error) {
 	// extract traceID and spanID
 	pTraceID, _ := trace.TraceIDFromHex(traceID)
 	pSpanID, _ := trace.SpanIDFromHex(spanID)
@@ -230,7 +230,7 @@ func (n *HTTPController) Run(ctx context.Context, handler TaskHandler) error {
 	}
 
 	// set remote span context
-	remoteSpanCtx, err := n.traceSpaceContextFromValues(task.TraceID, task.SpanID)
+	remoteSpanCtx, err := traceSpaceContextFromValues(task.TraceID, task.SpanID)
 	if err != nil {
 		n.logger.Debug(err.Error())
 	} else {

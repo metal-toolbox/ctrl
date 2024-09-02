@@ -17,6 +17,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -322,8 +323,26 @@ func (n *NatsController) processConditionFromEvent(ctx context.Context, msg even
 		return
 	}
 
-	// extract parent trace context from the event if any.
+	// extract parent trace context from the event located in the NATS header.
+	//
+	// The NATs header is to be deprecated as the Condition object
+	// now includes the trace, span IDs.
 	ctx = msg.ExtractOtelTraceContext(ctx)
+
+	if cond.TraceID != "" && cond.SpanID != "" {
+		// set remote span context
+		remoteSpanCtx, errSpan := traceSpaceContextFromValues(cond.TraceID, cond.SpanID)
+		if errSpan != nil {
+			n.logger.Debug(errSpan.Error())
+		} else {
+			// overwrite span context with remote span when available
+			ctx, span = otel.Tracer(pkgHTTPController).Start(
+				trace.ContextWithRemoteSpanContext(ctx, remoteSpanCtx),
+				"processConditionFromEvent",
+			)
+			defer span.End()
+		}
+	}
 
 	// setup the handle to query condition status
 	conditionStatusQueryor, err := n.NewNatsConditionStatusQueryor()
@@ -487,6 +506,12 @@ func (n *NatsController) processCondition(
 	// failure to publish the first status KV record is fatal
 	task := condition.NewTaskFromCondition(cond)
 	task.Status = condition.NewTaskStatusRecord("In process by controller: " + n.hostname)
+
+	// default trace, span IDs to controller context
+	if cond.TraceID == "" && cond.SpanID == "" {
+		task.TraceID = trace.SpanFromContext(ctx).SpanContext().TraceID().String()
+		task.SpanID = trace.SpanFromContext(ctx).SpanContext().SpanID().String()
+	}
 
 	if err := publisher.Publish(ctx, task, false); err != nil {
 		msg := "error publishing first KV status record, condition aborted"
