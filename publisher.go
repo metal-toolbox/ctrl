@@ -63,15 +63,15 @@ func NewHTTPPublisher(
 func (p *PublisherHTTP) Publish(ctx context.Context, task *condition.Task[any, any], tsUpdateOnly bool) error {
 	var err error
 
-	if errSV := p.taskRepository.Publish(ctx, task, tsUpdateOnly); errSV != nil {
-		p.logger.WithError(errSV).Error("Task publish error")
-		err = errors.Join(err, errSV)
+	if errTask := p.taskRepository.Publish(ctx, task, tsUpdateOnly); errTask != nil {
+		p.logger.WithError(errTask).Error("Task publish error")
+		err = errors.Join(err, errTask)
 	}
 
-	errTask := p.statusValuePublisher.Publish(ctx, task.Server.ID, task.State, task.Status.MustMarshal(), tsUpdateOnly)
-	if errTask != nil {
-		p.logger.WithError(errTask).Error("Status Value publish error")
-		err = errors.Join(err, errTask)
+	errSV := p.statusValuePublisher.Publish(ctx, task.Server.ID, task.State, task.Status.MustMarshal(), tsUpdateOnly)
+	if errSV != nil {
+		p.logger.WithError(errSV).Error("Status Value publish error")
+		err = errors.Join(err, errSV)
 	}
 
 	return err
