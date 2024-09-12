@@ -209,6 +209,14 @@ func (n *HTTPController) Run(ctx context.Context, handler TaskHandler) error {
 
 	task, err := n.fetchTaskWithRetries(ctx, n.serverID, n.orcQueryRetries, n.queryInterval)
 	if err != nil {
+		if errors.Is(err, errNothingToDo) {
+			n.logger.WithError(err).WithFields(logrus.Fields{
+				"conditionID": task.ID.String(),
+			}).Info("nothing to do here")
+
+			return nil
+		}
+
 		return errors.Wrap(ErrHandlerInit, err.Error())
 	}
 
