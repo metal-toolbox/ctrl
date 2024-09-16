@@ -635,5 +635,6 @@ func (n *NatsController) runTaskHandlerWithMonitor(ctx context.Context, task *co
 }
 
 func (n *NatsController) concurrencyLimit() bool {
+	//nolint:gosec //We are never going to overflow this
 	return n.dispatched >= int32(n.concurrency)
 }
