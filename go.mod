@@ -5,7 +5,7 @@ go 1.22
 require (
 	github.com/coreos/go-oidc/v3 v3.11.0
 	github.com/google/uuid v1.6.0
-	github.com/metal-toolbox/conditionorc v1.1.8
+	github.com/metal-toolbox/conditionorc v1.1.9
 	github.com/metal-toolbox/rivets v1.3.7
 	github.com/nats-io/nats-server/v2 v2.10.20
 	github.com/nats-io/nats.go v1.36.0
