@@ -522,8 +522,8 @@ github.com/mattn/go-sqlite3 v1.14.14/go.mod h1:NyWgC/yNuGj7Q9rpYnZvas74GogHl5/Z4
 github.com/mattn/go-sqlite3 v1.14.22 h1:2gZY6PC6kBnID23Tichd1K+Z0oS6nE/XwU+Vz/5o4kU=
 github.com/mattn/go-sqlite3 v1.14.22/go.mod h1:Uh1q+B4BYcTPb+yiD3kU8Ct7aC0hY9fxUwlHK0RXw+Y=
 github.com/matttproud/golang_protobuf_extensions v1.0.1/go.mod h1:D8He9yQNgCq6Z5Ld7szi9bcBfOoFv/3dc6xSMkL2PC0=
-github.com/metal-toolbox/conditionorc v1.1.8 h1:5wjIdPLdLY2RkIeGZ73tTFEnKJxBzBM5ZJMopDqFgSg=
-github.com/metal-toolbox/conditionorc v1.1.8/go.mod h1:eXlXZoOJBmihR4/+xA2o1dj1sQTXkU63Ekma7Ouc+o0=
+github.com/metal-toolbox/conditionorc v1.1.9 h1:8VX8QWjHd+ZGacylwp5Q3PB8+Dt/9dBeA64e00BF93Y=
+github.com/metal-toolbox/conditionorc v1.1.9/go.mod h1:eXlXZoOJBmihR4/+xA2o1dj1sQTXkU63Ekma7Ouc+o0=
 github.com/metal-toolbox/fleetdb v1.19.5-0.20240913163810-6a9703ca4111 h1:WX236DysSYXrlHueyk8WMxUj/vReFUPumXjulZAhHgo=
 github.com/metal-toolbox/fleetdb v1.19.5-0.20240913163810-6a9703ca4111/go.mod h1:jaKeC1iiYjXhEPFoUTWtOM5Ni7+5+XZWIXnHIiBdq94=
 github.com/metal-toolbox/rivets v1.3.7 h1:ZM6AbX1xASS91FWi/2i2wh9twVOPJTzpD3c7fcllhBk=
