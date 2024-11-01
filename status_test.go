@@ -239,7 +239,7 @@ func TestPublish(t *testing.T) {
 		"publish active",
 	)
 
-	entry, err = kv.Get(facilityCode + "." + cond.ID.String())
+	_, err = kv.Get(facilityCode + "." + cond.ID.String())
 	require.Nil(t, err)
 }
 

@@ -23,14 +23,12 @@ import (
 )
 
 var (
-	kvTTL                  = 10 * 24 * time.Hour
-	errKV                  = errors.New("unable to bind to status KV bucket")
-	errGetKey              = errors.New("error fetching existing key, value for update")
-	errUnmarshalKey        = errors.New("error unmarshal key, value for update")
-	errControllerMismatch  = errors.New("condition controller mismatch error")
-	errStatusValue         = errors.New("condition status value error")
-	errStatusPublish       = errors.New("condition status publish error")
-	errStatusPublisherInit = errors.New("error initializing new publisher")
+	kvTTL            = 10 * 24 * time.Hour
+	errKV            = errors.New("unable to bind to status KV bucket")
+	errGetKey        = errors.New("error fetching existing key, value for update")
+	errUnmarshalKey  = errors.New("error unmarshal key, value for update")
+	errStatusValue   = errors.New("condition status value error")
+	errStatusPublish = errors.New("condition status publish error")
 )
 
 // ConditionStatusPublisher defines an interface for publishing status updates for conditions.
@@ -142,7 +140,7 @@ func (s *NatsConditionStatusPublisher) update(key string, sv *condition.StatusVa
 	case nats.ErrKeyNotFound:
 		// create a KV entry for this status value
 		sv.CreatedAt = sv.UpdatedAt // we set UpdatedAt in the body of Publish above
-		_, err := s.kv.Create(key, sv.MustBytes())
+		_, err = s.kv.Create(key, sv.MustBytes())
 		return err
 	case nil:
 		// we found something under that key, update it
@@ -155,7 +153,7 @@ func (s *NatsConditionStatusPublisher) update(key string, sv *condition.StatusVa
 		}
 		// update the KV with the new value
 		sv.CreatedAt = curSV.CreatedAt
-		_, err := s.kv.Update(key, sv.MustBytes(), entry.Revision())
+		_, err = s.kv.Update(key, sv.MustBytes(), entry.Revision())
 		return err
 	default:
 		return errors.Wrap(errGetKey, err.Error())
