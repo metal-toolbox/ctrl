@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"time"
 
 	"github.com/google/uuid"
@@ -24,13 +23,12 @@ import (
 )
 
 var (
-	kvTTL                  = 10 * 24 * time.Hour
-	errGetKey              = errors.New("error fetching existing key, value for update")
-	errUnmarshalKey        = errors.New("error unmarshal key, value for update")
-	errControllerMismatch  = errors.New("condition controller mismatch error")
-	errStatusValue         = errors.New("condition status value error")
-	errStatusPublish       = errors.New("condition status publish error")
-	errStatusPublisherInit = errors.New("error initializing new publisher")
+	kvTTL            = 10 * 24 * time.Hour
+	errKV            = errors.New("unable to bind to status KV bucket")
+	errGetKey        = errors.New("error fetching existing key, value for update")
+	errUnmarshalKey  = errors.New("error unmarshal key, value for update")
+	errStatusValue   = errors.New("condition status value error")
+	errStatusPublish = errors.New("condition status publish error")
 )
 
 // ConditionStatusPublisher defines an interface for publishing status updates for conditions.
@@ -44,8 +42,7 @@ type NatsConditionStatusPublisher struct {
 	log          *logrus.Logger
 	facilityCode string
 	conditionID  string
-	controllerID string
-	lastRev      uint64
+	controllerID registry.ControllerID
 }
 
 // NewNatsConditionStatusPublisher creates a new NatsConditionStatusPublisher for a given condition ID.
@@ -67,39 +64,22 @@ func NewNatsConditionStatusPublisher(
 		kv.WithReplicas(kvReplicas),
 	}
 
-	errKV := errors.New("unable to bind to status KV bucket")
 	statusKV, err := kv.CreateOrBindKVBucket(stream, string(conditionKind), kvOpts...)
 	if err != nil {
 		return nil, errors.Wrap(errKV, err.Error())
 	}
 
-	// retrieve current key revision if key exists
-	ckey := condition.StatusValueKVKey(facilityCode, conditionID)
-	currStatusEntry, errGet := statusKV.Get(ckey)
-	if errGet != nil && !errors.Is(errGet, nats.ErrKeyNotFound) {
-		return nil, errors.Wrap(
-			errStatusPublisherInit,
-			fmt.Sprintf("key: %s, error: %s", ckey, errGetKey.Error()),
-		)
-	}
-
-	var lastRev uint64
-	if currStatusEntry != nil {
-		lastRev = currStatusEntry.Revision()
-	}
-
 	return &NatsConditionStatusPublisher{
 		facilityCode: facilityCode,
 		conditionID:  conditionID,
-		controllerID: controllerID.String(),
+		controllerID: controllerID,
 		kv:           statusKV,
 		log:          logger,
-		lastRev:      lastRev,
 	}, nil
 }
 
 // Publish implements the StatusPublisher interface. It serializes and publishes the current status of a condition to NATS.
-func (s *NatsConditionStatusPublisher) Publish(ctx context.Context, serverID string, state condition.State, status json.RawMessage, tsUpdateOnly bool) error {
+func (s *NatsConditionStatusPublisher) Publish(ctx context.Context, serverID string, state condition.State, status json.RawMessage, _ bool) error {
 	_, span := otel.Tracer(pkgName).Start(
 		ctx,
 		"controller.Publish.KV",
@@ -108,7 +88,7 @@ func (s *NatsConditionStatusPublisher) Publish(ctx context.Context, serverID str
 	defer span.End()
 
 	sv := &condition.StatusValue{
-		WorkerID:  s.controllerID,
+		WorkerID:  s.controllerID.String(),
 		Target:    serverID,
 		TraceID:   trace.SpanFromContext(ctx).SpanContext().TraceID().String(),
 		SpanID:    trace.SpanFromContext(ctx).SpanContext().SpanID().String(),
@@ -119,24 +99,15 @@ func (s *NatsConditionStatusPublisher) Publish(ctx context.Context, serverID str
 
 	key := condition.StatusValueKVKey(s.facilityCode, s.conditionID)
 
-	var err error
-	var rev uint64
-	if s.lastRev == 0 {
-		sv.CreatedAt = time.Now()
-		rev, err = s.kv.Create(key, sv.MustBytes())
-	} else {
-		rev, err = s.update(key, sv, tsUpdateOnly)
-	}
-
+	err := s.update(key, sv)
 	if err != nil {
 		metricsNATSError("publish-condition-status")
 		span.AddEvent("status publish failure",
 			trace.WithAttributes(
-				attribute.String("controllerID", s.controllerID),
+				attribute.String("controllerID", s.controllerID.String()),
 				attribute.String("serverID", serverID),
 				attribute.String("conditionID", s.conditionID),
 				attribute.String("error", err.Error()),
-				attribute.Bool("tsUpdateOnly", tsUpdateOnly),
 			),
 		)
 
@@ -144,122 +115,49 @@ func (s *NatsConditionStatusPublisher) Publish(ctx context.Context, serverID str
 			"serverID":          serverID,
 			"assetFacilityCode": s.facilityCode,
 			"conditionID":       s.conditionID,
-			"lastRev":           s.lastRev,
 			"controllerID":      s.controllerID,
 			"key":               key,
-			"tsUpdateOnly":      tsUpdateOnly,
 		}).Warn("Condition status publish failed")
 
 		return errors.Wrap(errStatusPublish, err.Error())
 	}
 
-	s.lastRev = rev
 	s.log.WithFields(logrus.Fields{
 		"serverID":          serverID,
 		"assetFacilityCode": s.facilityCode,
 		"taskID":            s.conditionID,
-		"lastRev":           s.lastRev,
 		"key":               key,
-		"tsUpdateOnly":      tsUpdateOnly,
 	}).Trace("Condition status published")
 
 	return nil
 }
 
-func (s *NatsConditionStatusPublisher) update(key string, newStatusValue *condition.StatusValue, tsUpdateOnly bool) (uint64, error) {
+func (s *NatsConditionStatusPublisher) update(key string, sv *condition.StatusValue) error {
+	curSV := &condition.StatusValue{}
 	// fetch current status value from KV
 	entry, err := s.kv.Get(key)
-	if err != nil {
-		return 0, errors.Wrap(errGetKey, err.Error())
-	}
-
-	curStatusValue := &condition.StatusValue{}
-	if errJSON := json.Unmarshal(entry.Value(), &curStatusValue); errJSON != nil {
-		return 0, errors.Wrap(errUnmarshalKey, errJSON.Error())
-	}
-
-	if curStatusValue.WorkerID != s.controllerID {
-		return 0, errors.Wrap(errControllerMismatch, curStatusValue.WorkerID)
-	}
-
-	var update *condition.StatusValue
-	if tsUpdateOnly {
-		// timestamp only update
-		curStatusValue.UpdatedAt = time.Now()
-		update = curStatusValue
-	} else {
-		// full status update
-		update, err = statusValueUpdate(curStatusValue, newStatusValue)
-		if err != nil {
-			return 0, err
+	switch err {
+	case nats.ErrKeyNotFound:
+		// create a KV entry for this status value
+		sv.CreatedAt = sv.UpdatedAt // we set UpdatedAt in the body of Publish above
+		_, err = s.kv.Create(key, sv.MustBytes())
+		return err
+	case nil:
+		// we found something under that key, update it
+		if errJSON := json.Unmarshal(entry.Value(), curSV); errJSON != nil {
+			return errors.Wrap(errUnmarshalKey, errJSON.Error())
 		}
+		// don't update a completed condition
+		if condition.StateIsComplete(condition.State(curSV.State)) {
+			return fmt.Errorf("%w: attempt to update a completed condition", errStatusValue)
+		}
+		// update the KV with the new value
+		sv.CreatedAt = curSV.CreatedAt
+		_, err = s.kv.Update(key, sv.MustBytes(), entry.Revision())
+		return err
+	default:
+		return errors.Wrap(errGetKey, err.Error())
 	}
-
-	rev, err := s.kv.Update(key, update.MustBytes(), s.lastRev)
-	if err != nil {
-		return 0, err
-	}
-
-	return rev, nil
-}
-
-func statusValueUpdate(curSV, newSV *condition.StatusValue) (updateSV *condition.StatusValue, err error) {
-	// condition is already in a completed state, no further updates to be published
-	if condition.StateIsComplete(condition.State(curSV.State)) {
-		return nil, errors.Wrap(
-			errStatusValue,
-			"invalid update, condition state already finalized: "+
-				string(curSV.State),
-		)
-	}
-
-	// The update to be published
-	updateSV = &condition.StatusValue{
-		WorkerID:  curSV.WorkerID,
-		Target:    curSV.Target,
-		TraceID:   curSV.TraceID,
-		SpanID:    curSV.SpanID,
-		UpdatedAt: time.Now(),
-	}
-
-	// update State
-	if newSV.State != "" {
-		updateSV.State = newSV.State
-	} else {
-		updateSV.State = curSV.State
-	}
-
-	svEqual, err := svBytesEqual(curSV.Status, newSV.Status)
-	if err != nil {
-		return nil, errors.Wrap(errStatusValue, err.Error())
-	}
-
-	// update Status
-	//
-	// At minimum a valid Status JSON has 9 chars - `{"a": "b"}`
-	if newSV.Status != nil && !svEqual && len(newSV.Status) >= 9 {
-		updateSV.Status = newSV.Status
-	} else {
-		updateSV.Status = curSV.Status
-	}
-
-	return updateSV, nil
-}
-
-// svBytesEqual compares the JSON in the two json.RawMessage
-//
-// source: https://stackoverflow.com/questions/32408890/how-to-compare-two-json-requests
-func svBytesEqual(curSV, newSV json.RawMessage) (bool, error) {
-	var j, j2 interface{}
-	if err := json.Unmarshal(curSV, &j); err != nil {
-		return false, errors.Wrap(err, "current StatusValue unmarshal error")
-	}
-
-	if err := json.Unmarshal(newSV, &j2); err != nil {
-		return false, errors.Wrap(err, "new StatusValue unmarshal error")
-	}
-
-	return reflect.DeepEqual(j2, j), nil
 }
 
 // ConditionState represents the various states a condition can be in during its lifecycle.
