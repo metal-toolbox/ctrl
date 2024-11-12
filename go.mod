@@ -9,7 +9,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/metal-toolbox/conditionorc v1.11.4
 	github.com/metal-toolbox/rivets v1.3.10
-	github.com/nats-io/nats-server/v2 v2.10.20
+	github.com/nats-io/nats-server/v2 v2.10.22
 	github.com/nats-io/nats.go v1.37.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.20.5
