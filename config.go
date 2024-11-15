@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/metal-toolbox/rivets/events"
+	"github.com/metal-toolbox/rivets/v2/events"
 )
 
 const (

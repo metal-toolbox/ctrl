@@ -5,7 +5,7 @@ package ctrl
 import (
 	context "context"
 
-	registry "github.com/metal-toolbox/rivets/events/registry"
+	registry "github.com/metal-toolbox/rivets/v2/events/registry"
 	mock "github.com/stretchr/testify/mock"
 )
 

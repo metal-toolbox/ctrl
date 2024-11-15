@@ -20,9 +20,9 @@ import (
 
 	orc "github.com/metal-toolbox/conditionorc/pkg/api/v1/orchestrator/client"
 	orctypes "github.com/metal-toolbox/conditionorc/pkg/api/v1/orchestrator/types"
-	"github.com/metal-toolbox/rivets/condition"
-	"github.com/metal-toolbox/rivets/events"
-	"github.com/metal-toolbox/rivets/events/registry"
+	"github.com/metal-toolbox/rivets/v2/condition"
+	"github.com/metal-toolbox/rivets/v2/events"
+	"github.com/metal-toolbox/rivets/v2/events/registry"
 )
 
 func startJetStreamServer(t *testing.T) *server.Server {

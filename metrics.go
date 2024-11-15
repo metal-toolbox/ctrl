@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/metal-toolbox/rivets/condition"
+	"github.com/metal-toolbox/rivets/v2/condition"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"go.opentelemetry.io/otel/attribute"
