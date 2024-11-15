@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/metal-toolbox/rivets/events"
-	"github.com/metal-toolbox/rivets/events/registry"
+	"github.com/metal-toolbox/rivets/v2/events"
+	"github.com/metal-toolbox/rivets/v2/events/registry"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/goleak"

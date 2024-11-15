@@ -3,7 +3,7 @@ package ctrl
 import (
 	"context"
 
-	"github.com/metal-toolbox/rivets/condition"
+	"github.com/metal-toolbox/rivets/v2/condition"
 )
 
 // TaskHandler is passed in by the caller to be invoked when a message from the Jetstream is received for processing.

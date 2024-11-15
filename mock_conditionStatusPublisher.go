@@ -5,7 +5,7 @@ package ctrl
 import (
 	context "context"
 
-	condition "github.com/metal-toolbox/rivets/condition"
+	condition "github.com/metal-toolbox/rivets/v2/condition"
 
 	json "encoding/json"
 
