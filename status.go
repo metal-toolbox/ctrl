@@ -23,12 +23,14 @@ import (
 )
 
 var (
-	kvTTL            = 10 * 24 * time.Hour
-	errKV            = errors.New("unable to bind to status KV bucket")
-	errGetKey        = errors.New("error fetching existing key, value for update")
-	errUnmarshalKey  = errors.New("error unmarshal key, value for update")
-	errStatusValue   = errors.New("condition status value error")
-	errStatusPublish = errors.New("condition status publish error")
+	kvTTL              = 10 * 24 * time.Hour
+	errKV              = errors.New("unable to bind to status KV bucket")
+	errGetKey          = errors.New("error fetching existing key, value for update")
+	errUnmarshalKey    = errors.New("error unmarshal key, value for update")
+	errStatusValue     = errors.New("condition status value error")
+	errStatusPublish   = errors.New("condition status publish error")
+	errOtherController = errors.New("condition being handled by another controller")
+	errInProgress      = errors.New("condition is in progress")
 )
 
 // ConditionStatusPublisher defines an interface for publishing status updates for conditions.
@@ -67,6 +69,27 @@ func NewNatsConditionStatusPublisher(
 	statusKV, err := kv.CreateOrBindKVBucket(stream, string(conditionKind), kvOpts...)
 	if err != nil {
 		return nil, errors.Wrap(errKV, err.Error())
+	}
+
+	// before we return, check the status (if any) of this condition and bail if the
+	// condition is in progress somewhere else
+	key := condition.StatusValueKVKey(facilityCode, conditionID)
+	entry, err := statusKV.Get(key)
+
+	switch err {
+	case nil:
+		existing := &condition.StatusValue{}
+		if err := json.Unmarshal(entry.Value(), existing); err != nil {
+			return nil, fmt.Errorf("%w: %s", errStatusValue, err.Error())
+		}
+		if existing.WorkerID != controllerID.String() {
+			return nil, fmt.Errorf("%w: %s", errOtherController, existing.WorkerID)
+		}
+		return nil, fmt.Errorf("%w: last update %s", errInProgress, existing.UpdatedAt.String())
+	case nats.ErrKeyNotFound:
+		// no existing state, we can proceed
+	default:
+		return nil, fmt.Errorf("%w: %s", errGetKey, err.Error())
 	}
 
 	return &NatsConditionStatusPublisher{

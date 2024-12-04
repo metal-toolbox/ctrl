@@ -373,27 +373,35 @@ func (n *NatsController) processConditionFromEvent(ctx context.Context, msg even
 		n.stream.(*events.NatsJetstream),
 		n.logger,
 	)
-	if err != nil {
-		msg := "publisher init failed"
-		n.logger.WithError(err).WithFields(logrus.Fields{
-			"conditionID": cond.ID.String(),
-		}).Error(msg)
 
-		// send this message back on the bus to be redelivered, or atleast attempt to.
-		eventAcknowleger.nak()
-
-		metricsEventsCounter(true, "nack")
-		spanEvent(
-			span,
-			cond,
-			n.ID(),
-			fmt.Sprintf("sent nack, info: %s, err: %s", msg, err.Error()),
-		)
-
+	if err == nil {
+		n.processCondition(ctx, cond, publisher, eventAcknowleger)
 		return
 	}
 
-	n.processCondition(ctx, cond, publisher, eventAcknowleger)
+	if errors.Is(err, errInProgress) {
+		n.logger.WithError(err).
+			WithFields(logrus.Fields{
+				"conditionID": cond.ID.String(),
+			}).Warn("this controller is already handling the event")
+		eventAcknowleger.inProgress()
+		return
+	}
+
+	n.logger.WithError(err).WithFields(logrus.Fields{
+		"conditionID": cond.ID.String(),
+	}).Error("failed to create NATS publisher")
+
+	// send this message back on the bus to be redelivered, or atleast attempt to.
+	eventAcknowleger.nak()
+
+	metricsEventsCounter(true, "nack")
+	spanEvent(
+		span,
+		cond,
+		n.ID(),
+		fmt.Sprintf("sent nack, info: %s", err.Error()),
+	)
 }
 
 func conditionFromEvent(e events.Message) (*condition.Condition, error) {

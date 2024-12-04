@@ -83,7 +83,7 @@ func TestNewNatsConditionStatusPublisher(t *testing.T) {
 		logger:        logrus.New(),
 	}
 
-	// test happy case
+	// test happy case -- no existing status
 	p, err := NewNatsConditionStatusPublisher(
 		"test",
 		cond.ID.String(),
@@ -95,33 +95,39 @@ func TestNewNatsConditionStatusPublisher(t *testing.T) {
 		controller.logger,
 	)
 
-	publisher, ok := p.(*NatsConditionStatusPublisher)
-	assert.True(t, ok)
+	require.NotNil(t, p, "publisher constructor")
+	require.NoError(t, err)
 
-	require.Nil(t, err)
-	require.NotNil(t, publisher, "publisher constructor")
+	publisher := p.(*NatsConditionStatusPublisher)
 
 	assert.Equal(t, controller.facilityCode, publisher.facilityCode)
 	assert.Equal(t, cond.ID.String(), publisher.conditionID)
 	assert.Equal(t, controller.logger, publisher.log)
 
-	// Test re-initialized publisher will set lastRev to KV revision and subsequent publishes work
+	// Write a status value to the KV to simulate a condition in progress
 	serverID := uuid.New()
-	require.NotPanics(t,
-		func() {
-			errP := publisher.Publish(
-				context.Background(),
-				serverID.String(),
-				condition.Pending,
-				[]byte(`{"pending": "true"}`),
-				false,
-			)
-			require.NoError(t, errP)
-		},
-		"publish 1",
-	)
+	errP := publisher.Publish(context.Background(), serverID.String(), condition.Pending,
+		[]byte(`{"pending": "true"}`), false)
 
-	p, err = NewNatsConditionStatusPublisher(
+	require.NoError(t, errP, "writing status")
+
+	// create a new publisher with a different controller id, expect failure
+	otherID := registry.GetID("other")
+	_, err = NewNatsConditionStatusPublisher(
+		"test",
+		cond.ID.String(),
+		facilityCode,
+		cond.Kind,
+		otherID,
+		0,
+		evJS,
+		controller.logger,
+	)
+	require.Error(t, err)
+	require.ErrorIs(t, err, errOtherController, "new controller id")
+
+	// create a new publisher with our own controller id, expect failure to avoid having multiple go-routines racing
+	_, err = NewNatsConditionStatusPublisher(
 		"test",
 		cond.ID.String(),
 		facilityCode,
@@ -131,26 +137,8 @@ func TestNewNatsConditionStatusPublisher(t *testing.T) {
 		evJS,
 		controller.logger,
 	)
-
-	publisher, ok = p.(*NatsConditionStatusPublisher)
-	assert.True(t, ok)
-
-	require.Nil(t, err)
-	require.NotNil(t, publisher, "publisher constructor")
-
-	require.NotPanics(t,
-		func() {
-			errP := publisher.Publish(
-				context.Background(),
-				serverID.String(),
-				condition.Active,
-				[]byte(`{"some work...": "true"}`),
-				false,
-			)
-			require.NoError(t, errP)
-		},
-		"publish 2",
-	)
+	require.Error(t, err)
+	require.ErrorIs(t, err, errInProgress, "same controller id")
 }
 
 func TestPublish(t *testing.T) {
