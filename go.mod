@@ -2,7 +2,7 @@ module github.com/metal-toolbox/ctrl
 
 go 1.22.7
 
-toolchain go1.23.1
+toolchain go1.23.4
 
 require (
 	github.com/coreos/go-oidc/v3 v3.11.0
