@@ -5,7 +5,7 @@ go 1.22.7
 toolchain go1.23.1
 
 require (
-	github.com/coreos/go-oidc/v3 v3.11.0
+	github.com/coreos/go-oidc/v3 v3.12.0
 	github.com/google/uuid v1.6.0
 	github.com/metal-toolbox/conditionorc v1.12.0
 	github.com/metal-toolbox/rivets/v2 v2.0.0
