@@ -10,7 +10,7 @@ require (
 	github.com/metal-toolbox/conditionorc v1.12.2
 	github.com/metal-toolbox/rivets/v2 v2.1.0
 	github.com/nats-io/nats-server/v2 v2.10.25
-	github.com/nats-io/nats.go v1.38.0
+	github.com/nats-io/nats.go v1.39.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.20.5
 	github.com/sirupsen/logrus v1.9.3
