@@ -1,13 +1,8 @@
 # golangci.com configuration
 # https://github.com/golangci/golangci/wiki/Configuration
-service:
-  golangci-lint-version: 1.56.2 # use the fixed version to not introduce new linters unexpectedly
 
 linters-settings:
   govet:
-    enable:
-    auto-fix: true
-    shadow: true
     settings:
       printf:
         funcs:
@@ -15,8 +10,6 @@ linters-settings:
           - (github.com/golangci/golangci-lint/pkg/logutils.Log).Warnf
           - (github.com/golangci/golangci-lint/pkg/logutils.Log).Errorf
           - (github.com/golangci/golangci-lint/pkg/logutils.Log).Fatalf
-  revive:
-    min-confidence: 0
   gocyclo:
     min-complexity: 12
   dupl:
@@ -26,7 +19,6 @@ linters-settings:
     min-occurrences: 2
   misspell:
     locale: US
-    auto-fix: true
   lll:
     line-length: 140
   goimports:
@@ -40,8 +32,6 @@ linters-settings:
       - wrapperFunc
   gofumpt:
     extra-rules: true
-  wsl:
-    auto-fix: true
 
 linters:
   enable:
@@ -69,9 +59,6 @@ linters:
     - gosec
   enable-all: false
   disable-all: true
-
-run:
-  #  build-tags:
 
 issues:
   exclude-dirs:
@@ -107,4 +94,3 @@ issues:
     - (Expect directory permissions to be 0750 or less|Expect file permissions to be 0600 or less)
     # EXC0010 gosec: False positive is triggered by 'src, err := ioutil.ReadFile(filename)'
     - Potential file inclusion via variable
-exclude-use-default: false
