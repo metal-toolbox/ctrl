@@ -7,7 +7,7 @@ toolchain go1.23.1
 require (
 	github.com/coreos/go-oidc/v3 v3.12.0
 	github.com/google/uuid v1.6.0
-	github.com/metal-toolbox/conditionorc v1.12.2
+	github.com/metal-toolbox/conditionorc v1.12.3
 	github.com/metal-toolbox/rivets/v2 v2.1.0
 	github.com/nats-io/nats-server/v2 v2.10.25
 	github.com/nats-io/nats.go v1.39.0
