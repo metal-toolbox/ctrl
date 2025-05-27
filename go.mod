@@ -7,8 +7,8 @@ toolchain go1.23.1
 require (
 	github.com/coreos/go-oidc/v3 v3.12.0
 	github.com/google/uuid v1.6.0
-	github.com/metal-toolbox/conditionorc v1.12.2
-	github.com/metal-toolbox/rivets/v2 v2.1.0
+	github.com/metal-toolbox/conditionorc v1.12.5
+	github.com/metal-toolbox/rivets/v2 v2.1.1
 	github.com/nats-io/nats-server/v2 v2.10.27
 	github.com/nats-io/nats.go v1.39.1
 	github.com/pkg/errors v0.9.1
@@ -96,7 +96,7 @@ require (
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/afero v1.11.0 // indirect
 	github.com/spf13/cast v1.7.0 // indirect
-	github.com/spf13/cobra v1.8.1 // indirect
+	github.com/spf13/cobra v1.9.1 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/spf13/viper v1.19.0 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
